@@ -1,0 +1,5 @@
+{
+  "name": "Nestpick Clone",
+  "description": "A rental property finder application replicating the Nestpick UI with Gemini-powered search results.",
+  "requestFramePermissions": []
+}
