@@ -71,10 +71,10 @@ export default function Home() {
             dbListings = dbData.map((p: any) => ({
                 id: p.id.toString(),
                 title: p.title,
-                price: p.price,
+                price: Number(p.price),
                 currency: '$',
                 period: 'night',
-                type: 'APARTMENT',
+                type: (p.details?.propertyType || 'APARTMENT') as Listing['type'],
                 imageUrl: p.assets?.[0]?.url || `https://picsum.photos/seed/${p.id}/800/600`,
                 imageCount: p.assets?.length || 1,
                 provider: 'Host',
@@ -82,9 +82,12 @@ export default function Home() {
                 discount: 0,
                 rating: 5.0,
                 reviewCount: 0,
-                amenities: ['Wifi', 'Kitchen'],
+                amenities: Array.isArray(p.details?.amenities) ? p.details.amenities : ['Wifi', 'Kitchen'],
                 address: p.location,
                 description: p.description,
+                size: Number(p.details?.sizeSqm) || undefined,
+                maxGuests: Number(p.details?.maxGuests) || undefined,
+                assets: Array.isArray(p.assets) ? p.assets : [],
             }));
         }
 
@@ -118,7 +121,7 @@ export default function Home() {
         size: listing.size || Math.floor(Math.random() * 80) + 40,
         floor: Math.floor(Math.random() * 5) + 1,
         maxGuests: Math.floor(Math.random() * 3) + 1,
-        address: `${listing.title}, ${city}`,
+        address: listing.address || `${listing.title}, ${city}`,
         rooms: listing.rooms || [
             { id: 'r1', name: 'Master Bedroom', price: Math.floor(listing.price * 0.6), sqft: 20, isAvailable: true, features: ['King Bed', 'En-suite', 'Balcony'] },
             { id: 'r2', name: 'Standard Room', price: Math.floor(listing.price * 0.4), sqft: 14, isAvailable: false, features: ['Double Bed', 'Desk'] }
