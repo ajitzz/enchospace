@@ -9,11 +9,13 @@ import WishlistPage from './components/WishlistPage';
 import BookingPage from './components/BookingPage';
 import ReservationsPage from './components/ReservationsPage';
 import FlyToAnimation from './components/FlyToAnimation';
+import HostOnboardingPage from './components/HostOnboardingPage';
+import AdminControlPage from './components/AdminControlPage';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
 import { Listing, Room, NearbyPoint } from './types';
 
-type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
+type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'HOST' | 'ADMIN';
 
 interface BookingData {
     moveInDate: string;
@@ -192,6 +194,14 @@ function App() {
       );
   }
 
+  if (currentView === 'HOST') {
+      return <HostOnboardingPage onBack={() => setCurrentView('SEARCH')} />;
+  }
+
+  if (currentView === 'ADMIN') {
+      return <AdminControlPage onBack={() => setCurrentView('SEARCH')} />;
+  }
+
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-[#E31C5F]/20 selection:text-[#E31C5F]">
       {/* Global Fly Animation Overlay */}
@@ -208,6 +218,8 @@ function App() {
         currentCity={city} 
         onWishlistClick={() => setCurrentView('WISHLIST')}
         onReservesClick={() => setCurrentView('RESERVATIONS')}
+        onHostClick={() => setCurrentView('HOST')}
+        onAdminClick={() => setCurrentView('ADMIN')}
         highlightReserves={highlightReserves}
         highlightWishlist={highlightWishlist}
         reservesCount={reservations.length}
