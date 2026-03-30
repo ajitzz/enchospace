@@ -1,10 +1,61 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Listing } from "../types";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getApiKey = (): string => {
+  // Vite-exposed variable for browser builds (recommended for this app architecture)
+  const viteKey = import.meta.env.VITE_GEMINI_API_KEY;
+  // Backward-compatible fallbacks for older local setups
+  const legacyKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  return viteKey || legacyKey || "";
+};
+
+const getFallbackListings = (): Listing[] => [
+  {
+    id: "1",
+    title: "Modern Loft in Center",
+    price: 1450,
+    currency: "€",
+    period: "month",
+    type: "APARTMENT",
+    imageUrl: "https://picsum.photos/seed/fallback1/800/600",
+    imageCount: 5,
+    provider: "Blueground",
+    isVerified: true,
+    discount: 0,
+    rating: 4.8,
+    reviewCount: 42,
+    amenities: ["Wifi", "AC", "Kitchen"]
+  },
+  {
+    id: "2",
+    title: "Cozy Studio near Park",
+    price: 980,
+    currency: "€",
+    period: "month",
+    type: "STUDIO",
+    imageUrl: "https://picsum.photos/seed/fallback2/800/600",
+    imageCount: 4,
+    provider: "Spotahome",
+    isVerified: false,
+    discount: 15,
+    rating: 4.2,
+    reviewCount: 12,
+    amenities: ["Wifi", "Balcony"]
+  }
+];
 
 export const fetchListingsForCity = async (city: string): Promise<Listing[]> => {
+  const apiKey = getApiKey();
+
+  if (!apiKey) {
+    console.warn(
+      "Gemini API key is missing. Set VITE_GEMINI_API_KEY in Vercel/local env to enable live AI listings. Falling back to static listings."
+    );
+    return getFallbackListings();
+  }
+
   try {
+    const genAI = new GoogleGenAI({ apiKey });
     const model = "gemini-2.5-flash";
     const prompt = `Generate 8 high-quality rental listings for ${city}. 
     Include a mix of modern apartments and cozy rooms. 
@@ -37,67 +88,32 @@ export const fetchListingsForCity = async (city: string): Promise<Listing[]> => 
               isNew: { type: Type.BOOLEAN },
               rating: { type: Type.NUMBER },
               reviewCount: { type: Type.INTEGER },
-              amenities: { type: Type.ARRAY, items: { type: Type.STRING } },
+              amenities: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ["id", "title", "price", "type", "provider"],
-          },
-        },
-      },
+            required: ["id", "title", "price", "type", "provider"]
+          }
+        }
+      }
     });
 
     const data = JSON.parse(response.text || "[]");
 
     // Hydrate with client-side only data (images, map coords)
-    return data.map((item: any, index: number) => ({
+    return data.map((item: any) => ({
       ...item,
       imageCount: 5,
       // Using specific keywords to get nicer architecture/interior shots
       imageUrl: `https://picsum.photos/seed/${item.id}A/800/600`,
       // Mock coordinates for the visual map centered roughly on the canvas
-      lat: 50 + (Math.random() * 40),
-      lng: 10 + (Math.random() * 40),
+      lat: 50 + Math.random() * 40,
+      lng: 10 + Math.random() * 40,
       // Fallbacks if AI omits them
       rating: item.rating || 4.5,
       reviewCount: item.reviewCount || Math.floor(Math.random() * 100),
       amenities: item.amenities || ["Wifi", "Kitchen", "Heating"]
     }));
-
   } catch (error) {
     console.error("Gemini Error:", error);
-    // Fallback data
-    return [
-      {
-        id: "1",
-        title: "Modern Loft in Center",
-        price: 1450,
-        currency: "€",
-        period: "month",
-        type: "APARTMENT",
-        imageUrl: "https://picsum.photos/seed/fallback1/800/600",
-        imageCount: 5,
-        provider: "Blueground",
-        isVerified: true,
-        discount: 0,
-        rating: 4.8,
-        reviewCount: 42,
-        amenities: ["Wifi", "AC", "Kitchen"]
-      },
-      {
-        id: "2",
-        title: "Cozy Studio near Park",
-        price: 980,
-        currency: "€",
-        period: "month",
-        type: "STUDIO",
-        imageUrl: "https://picsum.photos/seed/fallback2/800/600",
-        imageCount: 4,
-        provider: "Spotahome",
-        isVerified: false,
-        discount: 15,
-        rating: 4.2,
-        reviewCount: 12,
-        amenities: ["Wifi", "Balcony"]
-      },
-    ];
+    return getFallbackListings();
   }
 };
