@@ -10,7 +10,6 @@ import BookingPage from './components/BookingPage';
 import ReservationsPage from './components/ReservationsPage';
 import FlyToAnimation from './components/FlyToAnimation';
 import AdminDashboard from './components/AdminDashboard';
-import HostSpaceWizard from './components/HostSpaceWizard';
 import PaymentSection from './components/PaymentSection';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
@@ -19,7 +18,7 @@ import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType 
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp } from 'firebase/firestore';
 
-type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'ADMIN' | 'PAYMENT' | 'HOST_WIZARD';
+type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'ADMIN' | 'PAYMENT';
 
 interface BookingData {
     moveInDate: string;
@@ -215,19 +214,6 @@ function App() {
       return <AdminDashboard onBack={() => setCurrentView('SEARCH')} />;
   }
 
-  if (currentView === 'HOST_WIZARD') {
-      return (
-          <HostSpaceWizard 
-            user={user} 
-            onBack={() => setCurrentView('SEARCH')} 
-            onSuccess={() => {
-                setCurrentView('SEARCH');
-                // Refresh listings or show success toast
-            }}
-          />
-      );
-  }
-
   if (currentView === 'PAYMENT' && selectedListing && lastBooking) {
       return (
           <PaymentSection 
@@ -291,13 +277,6 @@ function App() {
         onWishlistClick={() => setCurrentView('WISHLIST')}
         onReservesClick={() => setCurrentView('RESERVATIONS')}
         onAdminClick={() => setCurrentView('ADMIN')}
-        onHostClick={() => {
-            if (!user) {
-                loginWithGoogle();
-                return;
-            }
-            setCurrentView('HOST_WIZARD');
-        }}
         onLogin={loginWithGoogle}
         onLogout={logout}
         user={user}

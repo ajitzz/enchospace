@@ -7,13 +7,9 @@ import {
   ShieldCheckIcon, 
   Loader2Icon, 
   ChevronRightIcon,
-  ArrowLeftIcon,
-  AlertCircleIcon
+  ArrowLeftIcon
 } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
 import { Listing } from '../types';
-
-const stripePromise = loadStripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 interface PaymentSectionProps {
   listing: Listing;
@@ -24,7 +20,6 @@ interface PaymentSectionProps {
 
 const PaymentSection: React.FC<PaymentSectionProps> = ({ listing, totalAmount, onSuccess, onBack }) => {
   const [step, setStep] = useState<'info' | 'processing' | 'success'>('info');
-  const [error, setError] = useState<string | null>(null);
   const [cardData, setCardData] = useState({
     number: '',
     expiry: '',
@@ -32,40 +27,15 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ listing, totalAmount, o
     name: ''
   });
 
-  const handlePayment = async () => {
+  const handlePayment = () => {
     setStep('processing');
-    setError(null);
-
-    try {
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: totalAmount * 100, // Stripe expects cents
-          currency: listing.currency === '€' ? 'eur' : 'usd',
-          listingId: listing.id
-        }),
-      });
-
-      if (!response.ok) throw new Error('Payment initialization failed');
-      
-      const { clientSecret } = await response.json();
-      const stripe = await stripePromise;
-
-      if (!stripe) throw new Error('Stripe failed to load');
-
-      // Simulate the confirmation for demo purposes while using real backend
+    // Simulate network latency for industrial feel
+    setTimeout(() => {
+      setStep('success');
       setTimeout(() => {
-        setStep('success');
-        setTimeout(() => {
-          onSuccess('pay_' + Math.random().toString(36).substr(2, 9));
-        }, 2000);
-      }, 3500);
-
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
-      setStep('info');
-    }
+        onSuccess('pay_' + Math.random().toString(36).substr(2, 9));
+      }, 2000);
+    }, 3500);
   };
 
   const formatCardNumber = (value: string) => {
@@ -106,13 +76,6 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ listing, totalAmount, o
               <h2 className="text-3xl font-black tracking-tight text-gray-900 mb-2">Secure Checkout</h2>
               <p className="text-gray-500 font-medium">Complete your reservation for <span className="text-black font-bold">{listing.title}</span></p>
             </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600">
-                <AlertCircleIcon className="w-5 h-5" />
-                <p className="text-sm font-bold">{error}</p>
-              </div>
-            )}
 
             {/* Price Summary Card */}
             <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 flex items-center justify-between">

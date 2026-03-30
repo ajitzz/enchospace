@@ -24,7 +24,6 @@ export interface Listing {
   period: string;
   type: 'APARTMENT' | 'ROOM' | 'STUDIO';
   imageUrl: string;
-  imageUrls?: string[];
   imageCount: number;
   provider: string;
   isVerified: boolean;
@@ -35,9 +34,6 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  city?: string;
-  ownerId?: string;
-  createdAt?: any;
   
   // Detailed fields
   description?: string;
@@ -47,8 +43,6 @@ export interface Listing {
   rooms?: Room[];
   nearby?: NearbyPoint[];
   maxGuests?: number;
-  bedrooms?: number;
-  bathrooms?: number;
 }
 
 export interface User {
@@ -56,7 +50,7 @@ export interface User {
   email: string;
   displayName: string | null;
   photoURL: string | null;
-  role: 'admin' | 'user' | 'super_admin';
+  role: 'admin' | 'user';
   favorites: string[];
   createdAt: any;
 }
@@ -67,9 +61,6 @@ export interface Reservation {
   userId: string;
   listing: Listing; // Hydrated for UI
   moveInDate: string;
-  configuration: string;
-  name: string;
-  phone: string;
   totalRent: number;
   status: 'pending' | 'confirmed' | 'cancelled';
   bookingDate: string;
