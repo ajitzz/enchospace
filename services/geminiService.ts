@@ -97,3 +97,28 @@ export const fetchListingsForCity = async (city: string): Promise<Listing[]> => 
     ];
   }
 };
+
+export const generateListingDescription = async (details: {
+  title: string;
+  type: string;
+  city: string;
+  amenities: string[];
+}): Promise<string> => {
+  const model = "gemini-2.5-flash";
+  const prompt = `Write a professional, high-converting rental listing description for a ${details.type} in ${details.city} titled "${details.title}". 
+  The space includes these amenities: ${details.amenities.join(", ")}.
+  The description should be inviting, highlight the benefits of the location and features, and be about 150-200 words.
+  Use a tone that is sophisticated yet approachable.`;
+
+  try {
+    const response = await genAI.models.generateContent({
+      model: model,
+      contents: prompt,
+    });
+
+    return response.text || "No description generated.";
+  } catch (error) {
+    console.error("Gemini Description Error:", error);
+    return `A beautiful ${details.type} located in the heart of ${details.city}. Featuring ${details.amenities.join(", ")}, this space is perfect for your next stay.`;
+  }
+};
