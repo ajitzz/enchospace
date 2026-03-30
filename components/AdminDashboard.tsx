@@ -14,7 +14,8 @@ import {
   Loader2Icon,
   SparklesIcon
 } from 'lucide-react';
-import { handleDbError, OperationType, isSupabaseConfigured, getAuthUser, fetchRows, insertRow, deleteRows } from '../supabase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Listing, AdminStats } from '../types';
 
 interface AdminDashboardProps {
@@ -48,20 +49,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
   const fetchListings = async () => {
     setLoading(true);
-    if (!isSupabaseConfigured) {
-      setListings([]);
-      setLoading(false);
-      return;
-    }
     try {
-      const authUser = await getAuthUser();
-      if (!authUser) {
-        setListings([]);
-        return;
-      }
-
-      const data = await fetchRows('listings', `ownerId=eq.${encodeURIComponent(authUser.id)}&select=*`);
-      setListings((data || []) as Listing[]);
+      const res = await fetch('/api/listings');
+      const data = await res.json();
+      // Filter by current user if needed, or backend can do it
+      const userListings = data.filter((l: any) => l.host_id === auth.currentUser?.uid);
+      setListings(userListings);
     } catch (e) {
       console.error("Fetch Error:", e);
     } finally {
@@ -70,39 +63,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   };
 
   const handleAddListing = async () => {
-    if (!isSupabaseConfigured) return;
+    if (!auth.currentUser) return;
     setIsSaving(true);
     try {
-      const authUser = await getAuthUser();
-      if (!authUser) return;
-
       const listingData = {
-        ...newListing,
-        ownerId: authUser.id,
-        createdAt: new Date().toISOString(),
-        rating: 4.5,
-        reviewCount: 0,
-        isVerified: true,
-        imageCount: 5
+        title: newListing.title,
+        description: newListing.description,
+        property_type: newListing.type,
+        price_per_night: newListing.price,
+        location_city: newListing.city,
+        amenities: newListing.amenities,
+        images: [newListing.imageUrl],
+        host_id: auth.currentUser.uid,
       };
-      await insertRow('listings', listingData);
-      setShowAddModal(false);
-      fetchListings();
+      
+      const res = await fetch('/api/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(listingData)
+      });
+      
+      if (res.ok) {
+        setShowAddModal(false);
+        fetchListings();
+      }
     } catch (e) {
-      handleDbError(e, OperationType.CREATE, 'listings');
+      console.error("Create Error:", e);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!isSupabaseConfigured) return;
     if (!confirm("Are you sure you want to delete this listing?")) return;
     try {
-      await deleteRows('listings', `id=eq.${encodeURIComponent(id)}`);
+      await deleteDoc(doc(db, 'listings', id));
       setListings(prev => prev.filter(l => l.id !== id));
     } catch (e) {
-      handleDbError(e, OperationType.DELETE, 'listings');
+      handleFirestoreError(e, OperationType.DELETE, 'listings');
     }
   };
 

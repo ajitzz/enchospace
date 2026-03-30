@@ -27,15 +27,27 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ listing, totalAmount, o
     name: ''
   });
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     setStep('processing');
-    // Simulate network latency for industrial feel
-    setTimeout(() => {
-      setStep('success');
+    try {
+      const res = await fetch('/api/payments/create-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: totalAmount, listingId: listing.id })
+      });
+      const data = await res.json();
+      
+      // Simulate network latency for industrial feel
       setTimeout(() => {
-        onSuccess('pay_' + Math.random().toString(36).substr(2, 9));
-      }, 2000);
-    }, 3500);
+        setStep('success');
+        setTimeout(() => {
+          onSuccess(data.clientSecret || 'pay_' + Math.random().toString(36).substr(2, 9));
+        }, 2000);
+      }, 1500);
+    } catch (error) {
+      console.error('Payment failed', error);
+      setStep('info');
+    }
   };
 
   const formatCardNumber = (value: string) => {

@@ -34,7 +34,6 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  city?: string;
   
   // Detailed fields
   description?: string;
@@ -62,9 +61,6 @@ export interface Reservation {
   userId: string;
   listing: Listing; // Hydrated for UI
   moveInDate: string;
-  configuration?: string;
-  name?: string;
-  phone?: string;
   totalRent: number;
   status: 'pending' | 'confirmed' | 'cancelled';
   bookingDate: string;
