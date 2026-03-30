@@ -33,6 +33,7 @@ const redis = process.env.UPSTASH_REDIS_URL
       tls: process.env.UPSTASH_REDIS_URL.startsWith("rediss://") ? {} : undefined,
     })
   : null;
+let redisConnected = false;
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
@@ -48,6 +49,8 @@ const s3Client = new S3Client({
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any })
   : null;
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+const KEEPALIVE_CRON_SECRET = process.env.CRON_SECRET;
 
 const allowedAssetMimeTypes = new Set([
   "image/jpeg",
@@ -134,7 +137,10 @@ async function bootstrapDatabase() {
 async function cacheGet<T>(key: string): Promise<T | null> {
   if (!redis) return null;
   try {
-    await redis.connect();
+    if (!redisConnected) {
+      await redis.connect();
+      redisConnected = true;
+    }
     const value = await redis.get(key);
     if (!value) return null;
     return JSON.parse(value) as T;
@@ -147,7 +153,10 @@ async function cacheGet<T>(key: string): Promise<T | null> {
 async function cacheSet(key: string, value: unknown, ttlSeconds: number) {
   if (!redis) return;
   try {
-    await redis.connect();
+    if (!redisConnected) {
+      await redis.connect();
+      redisConnected = true;
+    }
     await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
   } catch (error) {
     console.warn("Redis set failed:", error);
@@ -157,10 +166,99 @@ async function cacheSet(key: string, value: unknown, ttlSeconds: number) {
 async function cacheDelete(key: string) {
   if (!redis) return;
   try {
-    await redis.connect();
+    if (!redisConnected) {
+      await redis.connect();
+      redisConnected = true;
+    }
     await redis.del(key);
   } catch (error) {
     console.warn("Redis delete failed:", error);
+  }
+}
+
+async function cacheDeleteByPrefix(prefix: string) {
+  if (!redis) return;
+  try {
+    if (!redisConnected) {
+      await redis.connect();
+      redisConnected = true;
+    }
+    const stream = redis.scanStream({ match: `${prefix}*`, count: 200 });
+    stream.on("data", async (keys: string[]) => {
+      if (keys.length) {
+        await redis.del(...keys);
+      }
+    });
+    await new Promise((resolve, reject) => {
+      stream.on("end", resolve);
+      stream.on("error", reject);
+    });
+  } catch (error) {
+    console.warn("Redis prefix delete failed:", error);
+  }
+}
+
+const mapProperty = (row: any) => ({
+  id: row.id,
+  owner_id: row.owner_id,
+  title: row.title,
+  description: row.description,
+  price: Number(row.price),
+  location: row.location,
+  details: typeof row.details === "object" && row.details ? row.details : {},
+  assets: Array.isArray(row.assets) ? row.assets : [],
+  status: row.status || "available",
+  created_at: row.created_at,
+});
+
+async function persistPropertyManifestToS3(property: any) {
+  const bucket = process.env.AWS_S3_BUCKET_NAME;
+  if (!bucket) return null;
+
+  try {
+    const key = `properties/${property.owner_id || "public"}/manifests/property-${property.id}.json`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: JSON.stringify(property, null, 2),
+        ContentType: "application/json",
+      }),
+    );
+
+    return {
+      key,
+      url: `https://${bucket}.s3.${process.env.AWS_REGION || "us-east-1"}.amazonaws.com/${key}`,
+    };
+  } catch (error) {
+    console.warn("Property manifest upload failed:", error);
+    return null;
+  }
+}
+
+async function readProperties(city?: string) {
+  const params: any[] = [];
+  let sql = "SELECT * FROM properties";
+
+  if (city) {
+    params.push(`%${city}%`);
+    sql += ` WHERE location ILIKE $${params.length}`;
+  }
+
+  sql += " ORDER BY created_at DESC LIMIT 200";
+
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows.map(toListing);
+  } catch (error) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) throw error;
+
+    const query = supabaseAdmin.from("properties").select("*").order("created_at", { ascending: false }).limit(200);
+    const { data, error: supabaseError } = city
+      ? await query.ilike("location", `%${city}%`)
+      : await query;
+    if (supabaseError) throw error;
+    return (data || []).map(mapProperty).map(toListing);
   }
 }
 
@@ -216,11 +314,32 @@ async function startServer() {
     res.json({ status: "ok", time: new Date().toISOString() });
   });
 
-  app.get("/api/cron/keepalive", async (_req, res) => {
+  app.get("/api/config/public", (_req, res) => {
+    res.json({
+      stripeEnabled: Boolean(process.env.STRIPE_SECRET_KEY),
+      authEnabled: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+      uploadsEnabled: Boolean(process.env.AWS_S3_BUCKET_NAME),
+    });
+  });
+
+  app.get("/api/cron/keepalive", async (req, res) => {
     try {
+      if (KEEPALIVE_CRON_SECRET) {
+        const token = req.headers["x-cron-secret"];
+        if (token !== KEEPALIVE_CRON_SECRET) {
+          return res.status(401).json({ error: "Unauthorized keepalive call" });
+        }
+      }
+
       await pool.query("SELECT 1");
+      if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await supabaseAdmin.from("properties").select("id").limit(1);
+      }
       if (redis) {
-        await redis.connect();
+        if (!redisConnected) {
+          await redis.connect();
+          redisConnected = true;
+        }
         await redis.ping();
       }
       res.json({ status: "awake" });
@@ -240,18 +359,7 @@ async function startServer() {
         return res.json(cached);
       }
 
-      const params: any[] = [];
-      let sql = "SELECT * FROM properties";
-
-      if (city) {
-        params.push(`%${city}%`);
-        sql += ` WHERE location ILIKE $${params.length}`;
-      }
-
-      sql += " ORDER BY created_at DESC LIMIT 200";
-
-      const result = await pool.query(sql, params);
-      const rows = result.rows.map(toListing);
+      const rows = await readProperties(city);
       await cacheSet(cacheKey, rows, 300);
 
       return res.json(rows);
@@ -263,7 +371,11 @@ async function startServer() {
 
   app.post("/api/upload-url", requireAuth, async (req: AuthedRequest, res) => {
     try {
-      const { fileName, fileType } = req.body as { fileName?: string; fileType?: string };
+      const { fileName, fileType, fileSize } = req.body as {
+        fileName?: string;
+        fileType?: string;
+        fileSize?: number;
+      };
 
       if (!fileName || !fileType) {
         return res.status(400).json({ error: "fileName and fileType are required" });
@@ -271,6 +383,9 @@ async function startServer() {
 
       if (!allowedAssetMimeTypes.has(fileType)) {
         return res.status(400).json({ error: `Unsupported file type: ${fileType}` });
+      }
+      if (typeof fileSize === "number" && fileSize > 25 * 1024 * 1024) {
+        return res.status(400).json({ error: "Maximum file size is 25MB per asset" });
       }
 
       const bucket = process.env.AWS_S3_BUCKET_NAME;
@@ -304,6 +419,9 @@ async function startServer() {
       if (!title || !price || !location) {
         return res.status(400).json({ error: "title, price, and location are required" });
       }
+      if (!Array.isArray(assets) || assets.length === 0) {
+        return res.status(400).json({ error: "At least one uploaded media/document asset is required" });
+      }
 
       const inserted = await pool.query(
         `INSERT INTO properties (owner_id, title, description, price, location, assets, details)
@@ -320,9 +438,26 @@ async function startServer() {
         ],
       );
 
-      await cacheDelete("properties:all");
+      const property = toListing(inserted.rows[0]);
+      const manifest = await persistPropertyManifestToS3(property);
 
-      return res.status(201).json(toListing(inserted.rows[0]));
+      if (manifest) {
+        await pool.query(
+          `UPDATE properties
+           SET details = jsonb_set(details, '{manifest}', $1::jsonb, true)
+           WHERE id = $2`,
+          [JSON.stringify(manifest), property.id],
+        );
+        property.details = {
+          ...(property.details || {}),
+          manifest,
+        };
+      }
+
+      await cacheDelete("properties:all");
+      await cacheDeleteByPrefix("properties:city:");
+
+      return res.status(201).json(property);
     } catch (error) {
       console.error("Create property failed:", error);
       return res.status(500).json({ error: "Failed to create property" });
@@ -355,7 +490,7 @@ async function startServer() {
         return res.status(500).json({ error: "Stripe is not configured" });
       }
 
-      const origin = req.headers.origin || process.env.APP_BASE_URL || "http://localhost:3000";
+      const origin = req.headers.origin || APP_BASE_URL;
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",

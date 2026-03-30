@@ -1,20 +1,69 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# EnchoSpace — Property Hosting & Booking Platform
 
-# Run and deploy your AI Studio app
+EnchoSpace connects property hosts with customers (Airbnb-style workflow):
 
-This contains everything you need to run your app locally.
+- **Hosts** publish properties from **Host your Space**.
+- Property media and documents are uploaded to **AWS S3** via pre-signed upload URLs.
+- Listings are served from the backend with **Redis caching** for fast UX.
+- Users authenticate through **Supabase Auth** and pay via **Stripe Checkout**.
 
-View your app in AI Studio: https://ai.studio/apps/90218e3b-6328-47f2-a121-b93027e75a6e
+## Core architecture
 
-## Run Locally
+- **Frontend**: React + Vite
+- **Backend**: Express + PostgreSQL-compatible DB
+- **Auth**: Supabase Auth (JWT verification on server)
+- **Storage**: AWS S3 (assets: images/video/audio/pdf/docx/txt)
+- **Cache**: Upstash Redis
+- **Payments**: Stripe Checkout + webhook confirmation
+- **Cold-start mitigation**: `/api/cron/keepalive` endpoint for cron-based warmups
 
-**Prerequisites:**  Node.js
+## Environment variables
 
+Create `.env` with:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+PORT=3000
+APP_BASE_URL=http://localhost:3000
+
+# Database
+DATABASE_URL=postgres://...
+
+# Supabase
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+
+# Redis (Upstash)
+UPSTASH_REDIS_URL=rediss://...
+
+# AWS S3
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_S3_BUCKET_NAME=...
+
+# Stripe
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Optional keepalive protection
+CRON_SECRET=<secure-random-string>
+```
+
+## Local run
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Production notes
+
+1. Configure a cron job (for example, Vercel Cron) to call:
+   - `GET /api/cron/keepalive`
+   - Include header `x-cron-secret: <CRON_SECRET>` when `CRON_SECRET` is set.
+2. Configure Stripe webhook to point to:
+   - `POST /api/webhook/stripe`
+3. Ensure CORS / origin settings align with your deployed frontend domain.
