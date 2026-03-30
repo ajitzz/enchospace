@@ -9,11 +9,16 @@ import WishlistPage from './components/WishlistPage';
 import BookingPage from './components/BookingPage';
 import ReservationsPage from './components/ReservationsPage';
 import FlyToAnimation from './components/FlyToAnimation';
+import AdminDashboard from './components/AdminDashboard';
+import PaymentSection from './components/PaymentSection';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
-import { Listing, Room, NearbyPoint } from './types';
+import { Listing, Room, NearbyPoint, User, Reservation } from './types';
+import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp } from 'firebase/firestore';
 
-type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
+type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'ADMIN' | 'PAYMENT';
 
 interface BookingData {
     moveInDate: string;
@@ -23,18 +28,13 @@ interface BookingData {
     totalRent: number;
 }
 
-interface Reservation extends BookingData {
-    id: string;
-    listing: Listing;
-    bookingDate: string;
-}
-
 interface FlyAnimationState {
     listing: Listing;
     target: 'RESERVES' | 'WISHLIST';
 }
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
   const [city, setCity] = useState('Berlin');
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,9 +52,51 @@ function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [favorites, setFavorites] = useState<Listing[]>([]);
 
+  // 1. Auth Listener
   useEffect(() => {
-    handleSearch('Berlin');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          setUser(userSnap.data() as User);
+        }
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
   }, []);
+
+  // 2. Data Sync (Listings, Favorites, Reservations)
+  useEffect(() => {
+    // Real-time Listings
+    const qListings = query(collection(db, 'listings'));
+    const unsubListings = onSnapshot(qListings, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
+      if (data.length > 0) {
+        setListings(data);
+      } else {
+        // Fallback to Gemini if DB is empty
+        handleSearch('Berlin');
+      }
+    });
+
+    // Real-time Reservations
+    let unsubReserves = () => {};
+    if (user) {
+      const qReserves = query(collection(db, 'reservations'), where('userId', '==', user.uid));
+      unsubReserves = onSnapshot(qReserves, (snap) => {
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+        setReservations(data);
+      });
+    }
+
+    return () => {
+      unsubListings();
+      unsubReserves();
+    };
+  }, [user]);
 
   const handleSearch = async (searchCity: string) => {
     setLoading(true);
@@ -63,6 +105,7 @@ function App() {
     setSelectedListing(null);
     try {
         const data = await fetchListingsForCity(searchCity);
+        // In a real app, we might search Firestore here, but for now we use Gemini to populate the map
         setListings(data);
     } catch (e) {
         console.error("Failed to load listings", e);
@@ -71,58 +114,67 @@ function App() {
     }
   };
 
-  const toggleFavorite = (listing: Listing) => {
-      setFavorites(prev => {
-          const exists = prev.find(l => l.id === listing.id);
-          if (exists) {
-              return prev.filter(l => l.id !== listing.id);
+  const toggleFavorite = async (listing: Listing) => {
+      if (!user) {
+          await loginWithGoogle();
+          return;
+      }
+
+      const isFav = favorites.find(l => l.id === listing.id);
+      const userRef = doc(db, 'users', user.uid);
+
+      try {
+          if (isFav) {
+              await updateDoc(userRef, { favorites: arrayRemove(listing.id) });
+              setFavorites(prev => prev.filter(l => l.id !== listing.id));
           } else {
-              // Trigger Animation on Add
               setFlyAnimation({ listing, target: 'WISHLIST' });
-              return [...prev, listing];
+              await updateDoc(userRef, { favorites: arrayUnion(listing.id) });
+              setFavorites(prev => [...prev, listing]);
           }
-      });
+      } catch (e) {
+          handleFirestoreError(e, OperationType.UPDATE, 'users');
+      }
   };
 
   const isFavorite = (id: string) => !!favorites.find(l => l.id === id);
 
   const handleListingClick = (listing: Listing) => {
-    const detailedListing: Listing = {
-        ...listing,
-        description: listing.description || `Welcome to this stunning ${listing.type.toLowerCase()} in the heart of ${city}. This property offers a perfect blend of modern comfort and classic charm. High ceilings, large windows, and a spacious layout make this the ideal home for professionals or students.`,
-        size: listing.size || Math.floor(Math.random() * 80) + 40,
-        floor: Math.floor(Math.random() * 5) + 1,
-        maxGuests: Math.floor(Math.random() * 3) + 1,
-        address: `${listing.title}, ${city}`,
-        rooms: listing.rooms || [
-            { id: 'r1', name: 'Master Bedroom', price: Math.floor(listing.price * 0.6), sqft: 20, isAvailable: true, features: ['King Bed', 'En-suite', 'Balcony'] },
-            { id: 'r2', name: 'Standard Room', price: Math.floor(listing.price * 0.4), sqft: 14, isAvailable: false, features: ['Double Bed', 'Desk'] }
-        ],
-        nearby: listing.nearby || [
-            { name: 'Central Station', type: 'TRANSPORT', distance: '5 min walk', minutes: 5 },
-            { name: 'Organic Market', type: 'GROCERY', distance: '2 min walk', minutes: 2 },
-            { name: 'City Park', type: 'PARK', distance: '10 min walk', minutes: 10 },
-            { name: 'Coffee Lab', type: 'CAFE', distance: '1 min walk', minutes: 1 },
-            { name: 'FitFirst Gym', type: 'GYM', distance: '3 min walk', minutes: 3 },
-        ]
-    };
-    setSelectedListing(detailedListing);
+    setSelectedListing(listing);
     setCurrentView('DETAILS');
     window.scrollTo(0, 0);
   };
 
-  const handleBooking = (data: BookingData) => {
-      if (!selectedListing) return;
-      const newReservation: Reservation = {
-          id: Math.random().toString(36).substr(2, 9),
-          listing: selectedListing,
-          bookingDate: new Date().toISOString(),
-          ...data
-      };
-      setReservations(prev => [...prev, newReservation]);
+  const handleBookingStart = (data: BookingData) => {
+      if (!user) {
+          loginWithGoogle();
+          return;
+      }
       setLastBooking(data);
-      setCurrentView('BOOKING');
+      setCurrentView('PAYMENT');
       window.scrollTo(0, 0);
+  };
+
+  const handlePaymentSuccess = async (paymentId: string) => {
+      if (!selectedListing || !user || !lastBooking) return;
+
+      try {
+          const reservationData = {
+              listingId: selectedListing.id,
+              userId: user.uid,
+              moveInDate: lastBooking.moveInDate,
+              totalRent: lastBooking.totalRent,
+              status: 'confirmed',
+              paymentId,
+              bookingDate: new Date().toISOString(),
+              listing: selectedListing // Denormalized for easy display
+          };
+          
+          await addDoc(collection(db, 'reservations'), reservationData);
+          setCurrentView('BOOKING');
+      } catch (e) {
+          handleFirestoreError(e, OperationType.CREATE, 'reservations');
+      }
   };
 
   const handleAnimationComplete = () => {
@@ -151,9 +203,25 @@ function App() {
             onListingClick={handleListingClick}
             isFavorite={isFavorite(selectedListing.id)}
             onToggleFavorite={toggleFavorite}
-            onBook={handleBooking}
+            onBook={handleBookingStart}
+            user={user}
          />
          </>
+      );
+  }
+
+  if (currentView === 'ADMIN') {
+      return <AdminDashboard onBack={() => setCurrentView('SEARCH')} />;
+  }
+
+  if (currentView === 'PAYMENT' && selectedListing && lastBooking) {
+      return (
+          <PaymentSection 
+            listing={selectedListing}
+            totalAmount={lastBooking.totalRent}
+            onSuccess={handlePaymentSuccess}
+            onBack={() => setCurrentView('DETAILS')}
+          />
       );
   }
 
@@ -208,6 +276,10 @@ function App() {
         currentCity={city} 
         onWishlistClick={() => setCurrentView('WISHLIST')}
         onReservesClick={() => setCurrentView('RESERVATIONS')}
+        onAdminClick={() => setCurrentView('ADMIN')}
+        onLogin={loginWithGoogle}
+        onLogout={logout}
+        user={user}
         highlightReserves={highlightReserves}
         highlightWishlist={highlightWishlist}
         reservesCount={reservations.length}

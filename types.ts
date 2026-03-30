@@ -45,8 +45,30 @@ export interface Listing {
   maxGuests?: number;
 }
 
-export interface SearchState {
-  city: string;
-  loading: boolean;
-  results: Listing[];
+export interface User {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  photoURL: string | null;
+  role: 'admin' | 'user';
+  favorites: string[];
+  createdAt: any;
+}
+
+export interface Reservation {
+  id: string;
+  listingId: string;
+  userId: string;
+  listing: Listing; // Hydrated for UI
+  moveInDate: string;
+  totalRent: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  bookingDate: string;
+}
+
+export interface AdminStats {
+  totalListings: number;
+  totalReservations: number;
+  totalRevenue: number;
+  activeUsers: number;
 }

@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile and role information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth unique ID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User access level" },
+        "favorites": { "type": "array", "items": { "type": "string" }, "description": "List of listing IDs" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Listing": {
+      "title": "Property Listing",
+      "description": "Detailed information about a rental property.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "period": { "type": "string" },
+        "type": { "type": "string", "enum": ["APARTMENT", "ROOM", "STUDIO"] },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "imageCount": { "type": "number" },
+        "provider": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "discount": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "amenities": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "ownerId": { "type": "string", "description": "UID of the landlord/admin" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "price", "type", "city", "ownerId"]
+    },
+    "Reservation": {
+      "title": "Booking Reservation",
+      "description": "Details of a property booking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "listingId": { "type": "string" },
+        "userId": { "type": "string" },
+        "moveInDate": { "type": "string", "format": "date" },
+        "totalRent": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "paymentId": { "type": "string" },
+        "bookingDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["listingId", "userId", "moveInDate", "totalRent", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles and settings."
+    },
+    "/listings/{listingId}": {
+      "schema": "Listing",
+      "description": "Global rental listings."
+    },
+    "/reservations/{reservationId}": {
+      "schema": "Reservation",
+      "description": "Booking records."
+    }
+  }
+}
