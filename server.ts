@@ -8,7 +8,6 @@ import pg from "pg";
 import Stripe from "stripe";
 import Redis from "ioredis";
 import cron from "node-cron";
-import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -17,9 +16,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
-  : [];
 
 // Database Connection (Neon)
 const pool = new pg.Pool({
@@ -39,60 +35,8 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY) 
   : null;
 
-app.disable("x-powered-by");
-app.set("trust proxy", 1);
-app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  if (process.env.NODE_ENV === "production") {
-    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  }
-  next();
-});
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: false,
-}));
-app.use(express.json({ limit: "50kb" }));
-
-const rateLimitWindowMs = 15 * 60 * 1000;
-const maxApiRequestsPerWindow = 200;
-const requestCounts = new Map<string, { count: number; resetAt: number }>();
-app.use("/api", (req, res, next) => {
-  const key = req.ip || "unknown";
-  const now = Date.now();
-  const current = requestCounts.get(key);
-
-  if (!current || now > current.resetAt) {
-    requestCounts.set(key, { count: 1, resetAt: now + rateLimitWindowMs });
-    return next();
-  }
-
-  if (current.count >= maxApiRequestsPerWindow) {
-    const retryAfterSeconds = Math.ceil((current.resetAt - now) / 1000);
-    res.setHeader("Retry-After", retryAfterSeconds.toString());
-    return res.status(429).json({ error: "Too many requests. Please try again later." });
-  }
-
-  current.count += 1;
-  requestCounts.set(key, current);
-  return next();
-});
-
-const getGenAIClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GoogleGenAI({ apiKey });
-};
+app.use(cors());
+app.use(express.json());
 
 // --- API ROUTES ---
 
@@ -316,90 +260,6 @@ app.post("/api/create-payment-intent", async (req, res) => {
     res.json({ clientSecret: paymentIntent.client_secret });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
-  }
-});
-
-// 6. AI Routes (server-side only, API key never exposed to browser)
-app.get("/api/ai/listings", async (req, res) => {
-  const genAI = getGenAIClient();
-  if (!genAI) {
-    return res.status(500).json({ error: "AI service is not configured." });
-  }
-
-  const city = (req.query.city as string || "").trim();
-  if (!city) {
-    return res.status(400).json({ error: "city is required" });
-  }
-
-  try {
-    const model = "gemini-2.5-flash";
-    const prompt = `Generate 8 high-quality rental listings for ${city}. 
-Use Google Maps to find real neighborhoods and realistic pricing.
-Include a mix of modern apartments and cozy rooms. 
-Some should have discounts (between 10% and 30%). 
-Some should be "Verified". 
-Include realistic ratings (3.5 to 5.0) and review counts.
-Include 2-3 amenities per listing (e.g., Wifi, Kitchen, Gym).
-Prices should be realistic market rates for ${city} in appropriate currency (EUR for Europe, USD for US/International).
-
-IMPORTANT: Return ONLY a raw JSON array of objects. Do not include markdown formatting, backticks, or explanations.
-The JSON objects must have these properties:
-id (string), title (string), price (number), currency (string), period (string), type (APARTMENT, ROOM, or STUDIO), provider (string), isVerified (boolean), discount (number), isNew (boolean), rating (number), reviewCount (number), amenities (array of strings), address (string).`;
-
-    const response = await genAI.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        tools: [{ googleMaps: {} }],
-      },
-    });
-
-    let textResponse = (response.text || "[]").trim();
-    if (textResponse.startsWith("```json")) {
-      textResponse = textResponse.replace(/^```json/, "").replace(/```$/, "").trim();
-    } else if (textResponse.startsWith("```")) {
-      textResponse = textResponse.replace(/^```/, "").replace(/```$/, "").trim();
-    }
-
-    const listings = JSON.parse(textResponse);
-    if (!Array.isArray(listings)) {
-      return res.status(502).json({ error: "Unexpected AI response format." });
-    }
-
-    return res.json({ listings });
-  } catch (error) {
-    console.error("AI listings generation error:", error);
-    return res.status(502).json({ error: "Failed to generate listings." });
-  }
-});
-
-app.post("/api/ai/description", async (req, res) => {
-  const genAI = getGenAIClient();
-  if (!genAI) {
-    return res.status(500).json({ error: "AI service is not configured." });
-  }
-
-  const { title, type, city, amenities } = req.body || {};
-  if (!title || !type || !city || !Array.isArray(amenities)) {
-    return res.status(400).json({ error: "title, type, city, and amenities are required." });
-  }
-
-  const model = "gemini-2.5-flash";
-  const prompt = `Write a professional, high-converting rental listing description for a ${type} in ${city} titled "${title}".
-The space includes these amenities: ${amenities.join(", ")}.
-The description should be inviting, highlight the benefits of the location and features, and be about 150-200 words.
-Use a tone that is sophisticated yet approachable.`;
-
-  try {
-    const response = await genAI.models.generateContent({
-      model,
-      contents: prompt,
-    });
-
-    return res.json({ description: response.text || "No description generated." });
-  } catch (error) {
-    console.error("AI description generation error:", error);
-    return res.status(502).json({ error: "Failed to generate description." });
   }
 });
 
