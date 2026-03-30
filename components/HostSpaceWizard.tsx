@@ -19,8 +19,6 @@ import {
 } from 'lucide-react';
 import { User, Listing } from '../types';
 import { generateListingDescription } from '../services/geminiService';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface HostSpaceWizardProps {
   user: User | null;
@@ -117,7 +115,7 @@ const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ user, onBack, onSucce
       const listingData = {
         ...formData,
         ownerId: user.uid,
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
         rating: 5.0,
         reviewCount: 0,
         isVerified: false,
@@ -133,18 +131,10 @@ const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ user, onBack, onSucce
       });
 
       if (!response.ok) throw new Error("Failed to save to database");
-      
-      const savedListing = await response.json();
-
-      // Save to Firestore for real-time sync
-      await addDoc(collection(db, 'listings'), {
-        ...listingData,
-        postgresId: savedListing.id
-      });
 
       onSuccess();
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'listings');
+      console.error('Create listing failed', e);
     } finally {
       setIsSubmitting(false);
     }
