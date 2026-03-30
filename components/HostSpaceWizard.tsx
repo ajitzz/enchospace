@@ -19,9 +19,11 @@ import {
 } from 'lucide-react';
 import { User, Listing } from '../types';
 import { generateListingDescription } from '../services/geminiService';
-import { useAuth } from '../AuthContext';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface HostSpaceWizardProps {
+  user: User | null;
   onBack: () => void;
   onSuccess: () => void;
 }
@@ -35,8 +37,7 @@ const AMENITIES_OPTIONS = [
   { id: 'Parking', icon: MapPinIcon },
 ];
 
-const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ onBack, onSuccess }) => {
-  const { user } = useAuth();
+const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ user, onBack, onSuccess }) => {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,6 +117,7 @@ const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ onBack, onSuccess }) 
       const listingData = {
         ...formData,
         ownerId: user.uid,
+        createdAt: serverTimestamp(),
         rating: 5.0,
         reviewCount: 0,
         isVerified: false,
@@ -132,9 +134,17 @@ const HostSpaceWizard: React.FC<HostSpaceWizardProps> = ({ onBack, onSuccess }) 
 
       if (!response.ok) throw new Error("Failed to save to database");
       
+      const savedListing = await response.json();
+
+      // Save to Firestore for real-time sync
+      await addDoc(collection(db, 'listings'), {
+        ...listingData,
+        postgresId: savedListing.id
+      });
+
       onSuccess();
     } catch (e) {
-      console.error("Submit Listing Error:", e);
+      handleFirestoreError(e, OperationType.CREATE, 'listings');
     } finally {
       setIsSubmitting(false);
     }

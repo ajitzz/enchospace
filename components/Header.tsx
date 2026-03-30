@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon, LogOutIcon, ShieldCheckIcon } from './Icons';
 import { User } from '../types';
-import { useAuth } from '../AuthContext';
 
 interface HeaderProps {
   onSearch: (city: string) => void;
@@ -12,6 +11,8 @@ interface HeaderProps {
   onAdminClick: () => void;
   onHostClick: () => void;
   onLogin: () => void;
+  onLogout: () => void;
+  user: User | null;
   highlightReserves?: boolean;
   highlightWishlist?: boolean;
   reservesCount: number;
@@ -28,12 +29,13 @@ const Header: React.FC<HeaderProps> = ({
     onAdminClick,
     onHostClick,
     onLogin,
+    onLogout,
+    user,
     highlightReserves, 
     highlightWishlist,
     reservesCount,
     wishlistCount
 }) => {
-  const { user, logout: onLogout } = useAuth();
   const [inputValue, setInputValue] = useState(currentCity);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -393,47 +395,17 @@ const Header: React.FC<HeaderProps> = ({
                   {/* Drawer Body - Scrollable */}
                   <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
                       
-                      {!user ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => { onLogin(); setIsMobileMenuOpen(false); }}
-                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-50 border border-gray-100 active:scale-95 transition-transform"
-                          >
+                      {/* Account Actions */}
+                      <div className="grid grid-cols-2 gap-3">
+                          <button className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-50 border border-gray-100 active:scale-95 transition-transform">
                               <LogInIcon className="w-6 h-6 text-gray-700 mb-2" />
                               <span className="font-bold text-gray-900 text-sm">Log in</span>
                           </button>
-                          <button 
-                            onClick={() => { onLogin(); setIsMobileMenuOpen(false); }}
-                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-900 text-white active:scale-95 transition-transform shadow-md"
-                          >
+                          <button className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-900 text-white active:scale-95 transition-transform shadow-md">
                               <UserIcon className="w-6 h-6 mb-2" />
                               <span className="font-bold text-sm">Sign up</span>
                           </button>
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-white overflow-hidden">
-                                    {user.photoURL ? (
-                                        <img src={user.photoURL} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <UserIcon className="w-6 h-6" />
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900">{user.displayName}</p>
-                                    <p className="text-xs text-gray-500">{user.email}</p>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => { onLogout(); setIsMobileMenuOpen(false); }}
-                                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold active:scale-95 transition-transform"
-                            >
-                                <LogOutIcon className="w-5 h-5" />
-                                Log out
-                            </button>
-                        </div>
-                      )}
+                      </div>
 
                       {/* Hero: Become a Host */}
                       <div 

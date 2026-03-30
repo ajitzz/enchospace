@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Listing, NearbyPoint } from '../types';
+import { Listing, NearbyPoint, User } from '../types';
 import { ChevronLeft, StarIcon, ShieldCheck, HeartIcon, MapIcon, ChevronRight, PhoneIcon, MessageCircleIcon, WifiIcon, GymIcon, TrainIcon, ShoppingBagIcon, TreeIcon, CoffeeIcon, ChevronDown, XIcon, CalendarIcon } from './Icons';
 import ListingCard from './ListingCard';
-import { useAuth } from '../AuthContext';
 
 interface ListingDetailsProps {
   listing: Listing;
@@ -12,6 +11,7 @@ interface ListingDetailsProps {
   isFavorite: boolean;
   onToggleFavorite: (listing: Listing) => void;
   onBook?: (data: any) => void;
+  user?: User | null;
 }
 
 // Helper to map amenities to icons
@@ -155,8 +155,7 @@ const NearbyCategorySection = ({ type, points }: { type: string; points: NearbyP
     );
 };
 
-const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, similarListings, onListingClick, isFavorite, onToggleFavorite, onBook }) => {
-  const { user } = useAuth();
+const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, similarListings, onListingClick, isFavorite, onToggleFavorite, onBook, user }) => {
   const [showNav, setShowNav] = useState(true);
   const lastScrollY = useRef(0);
   

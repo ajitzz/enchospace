@@ -15,8 +15,9 @@ import PaymentSection from './components/PaymentSection';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
 import { Listing, Room, NearbyPoint, User, Reservation } from './types';
-import { useAuth } from './AuthContext';
-import { LoginModal } from './LoginModal';
+import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp } from 'firebase/firestore';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'ADMIN' | 'PAYMENT' | 'HOST_WIZARD';
 
@@ -34,8 +35,7 @@ interface FlyAnimationState {
 }
 
 function App() {
-  const { user, logout, refreshUser } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [city, setCity] = useState('Berlin');
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,54 +53,51 @@ function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [favorites, setFavorites] = useState<Listing[]>([]);
 
-  // 1. Data Sync (Listings, Favorites, Reservations)
+  // 1. Auth Listener
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch('/api/listings');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.length > 0) {
-            setListings(data);
-          } else {
-            handleSearch('Berlin');
-          }
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          setUser(userSnap.data() as User);
         }
-      } catch (error) {
-        console.error("Fetch Listings Error:", error);
+      } else {
+        setUser(null);
       }
-    };
-
-    fetchData();
+    });
+    return () => unsubscribe();
   }, []);
 
+  // 2. Data Sync (Listings, Favorites, Reservations)
   useEffect(() => {
-    const fetchUserSpecificData = async () => {
-      if (!user) {
-        setReservations([]);
-        setFavorites([]);
-        return;
+    // Real-time Listings
+    const qListings = query(collection(db, 'listings'));
+    const unsubListings = onSnapshot(qListings, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
+      if (data.length > 0) {
+        setListings(data);
+      } else {
+        // Fallback to Gemini if DB is empty
+        handleSearch('Berlin');
       }
+    });
 
-      try {
-        const res = await fetch('/api/reservations');
-        if (res.ok) {
-          const data = await res.json();
-          setReservations(data);
-        }
+    // Real-time Reservations
+    let unsubReserves = () => {};
+    if (user) {
+      const qReserves = query(collection(db, 'reservations'), where('userId', '==', user.uid));
+      unsubReserves = onSnapshot(qReserves, (snap) => {
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+        setReservations(data);
+      });
+    }
 
-        // Favorites are already in user object from /api/auth/me
-        if (user.favorites) {
-          const favs = listings.filter(l => user.favorites.includes(l.id));
-          setFavorites(favs);
-        }
-      } catch (error) {
-        console.error("Fetch User Data Error:", error);
-      }
+    return () => {
+      unsubListings();
+      unsubReserves();
     };
-
-    fetchUserSpecificData();
-  }, [user, listings]);
+  }, [user]);
 
   const handleSearch = async (searchCity: string) => {
     setLoading(true);
@@ -120,28 +117,24 @@ function App() {
 
   const toggleFavorite = async (listing: Listing) => {
       if (!user) {
-          setShowLoginModal(true);
+          await loginWithGoogle();
           return;
       }
 
       const isFav = favorites.find(l => l.id === listing.id);
+      const userRef = doc(db, 'users', user.uid);
 
       try {
           if (isFav) {
-              await fetch(`/api/favorites/${listing.id}`, { method: 'DELETE' });
+              await updateDoc(userRef, { favorites: arrayRemove(listing.id) });
               setFavorites(prev => prev.filter(l => l.id !== listing.id));
           } else {
               setFlyAnimation({ listing, target: 'WISHLIST' });
-              await fetch('/api/favorites', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ listingId: listing.id }),
-              });
+              await updateDoc(userRef, { favorites: arrayUnion(listing.id) });
               setFavorites(prev => [...prev, listing]);
           }
-          await refreshUser();
       } catch (e) {
-          console.error("Toggle Favorite Error:", e);
+          handleFirestoreError(e, OperationType.UPDATE, 'users');
       }
   };
 
@@ -155,7 +148,7 @@ function App() {
 
   const handleBookingStart = (data: BookingData) => {
       if (!user) {
-          setShowLoginModal(true);
+          loginWithGoogle();
           return;
       }
       setLastBooking(data);
@@ -169,24 +162,19 @@ function App() {
       try {
           const reservationData = {
               listingId: selectedListing.id,
+              userId: user.uid,
               moveInDate: lastBooking.moveInDate,
               totalRent: lastBooking.totalRent,
               status: 'confirmed',
               paymentId,
               bookingDate: new Date().toISOString(),
+              listing: selectedListing // Denormalized for easy display
           };
           
-          const res = await fetch('/api/reservations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reservationData),
-          });
-          
-          if (res.ok) {
-            setCurrentView('BOOKING');
-          }
+          await addDoc(collection(db, 'reservations'), reservationData);
+          setCurrentView('BOOKING');
       } catch (e) {
-          console.error("Payment Success Error:", e);
+          handleFirestoreError(e, OperationType.CREATE, 'reservations');
       }
   };
 
@@ -217,6 +205,7 @@ function App() {
             isFavorite={isFavorite(selectedListing.id)}
             onToggleFavorite={toggleFavorite}
             onBook={handleBookingStart}
+            user={user}
          />
          </>
       );
@@ -229,6 +218,7 @@ function App() {
   if (currentView === 'HOST_WIZARD') {
       return (
           <HostSpaceWizard 
+            user={user} 
             onBack={() => setCurrentView('SEARCH')} 
             onSuccess={() => {
                 setCurrentView('SEARCH');
@@ -303,19 +293,20 @@ function App() {
         onAdminClick={() => setCurrentView('ADMIN')}
         onHostClick={() => {
             if (!user) {
-                setShowLoginModal(true);
+                loginWithGoogle();
                 return;
             }
             setCurrentView('HOST_WIZARD');
         }}
-        onLogin={() => setShowLoginModal(true)}
+        onLogin={loginWithGoogle}
+        onLogout={logout}
+        user={user}
         highlightReserves={highlightReserves}
         highlightWishlist={highlightWishlist}
         reservesCount={reservations.length}
         wishlistCount={favorites.length}
       />
       <FilterBar />
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
 
       <main className="max-w-[1920px] mx-auto pt-6 px-4 md:px-6 relative">
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] xl:hidden">

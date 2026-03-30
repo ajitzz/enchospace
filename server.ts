@@ -8,7 +8,6 @@ import pg from "pg";
 import Stripe from "stripe";
 import Redis from "ioredis";
 import cron from "node-cron";
-import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -35,9 +34,6 @@ const redis = process.env.UPSTASH_REDIS_REST_URL
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY) 
   : null;
-
-// Gemini Initialization
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 app.use(cors());
 app.use(express.json());
@@ -264,83 +260,6 @@ app.post("/api/create-payment-intent", async (req, res) => {
     res.json({ clientSecret: paymentIntent.client_secret });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
-  }
-});
-
-// 6. AI API (Gemini)
-app.get("/api/ai/listings", async (req, res) => {
-  try {
-    const city = req.query.city as string || "Berlin";
-    const model = "gemini-3-flash-preview";
-    const prompt = `Generate 8 high-quality rental listings for ${city}. 
-    Use Google Maps to find real neighborhoods and realistic pricing.
-    Include a mix of modern apartments and cozy rooms. 
-    Some should have discounts (between 10% and 30%). 
-    Some should be "Verified". 
-    Include realistic ratings (3.5 to 5.0) and review counts.
-    Include 2-3 amenities per listing (e.g., Wifi, Kitchen, Gym).
-    Prices should be realistic market rates for ${city} in appropriate currency (EUR for Europe, USD for US/International).
-    
-    IMPORTANT: Return ONLY a raw JSON array of objects. Do not include markdown formatting, backticks, or explanations.
-    The JSON objects must have these properties:
-    id (string), title (string), price (number), currency (string), period (string), type (APARTMENT, ROOM, or STUDIO), provider (string), isVerified (boolean), discount (number), isNew (boolean), rating (number), reviewCount (number), amenities (array of strings), address (string).`;
-
-    const response = await genAI.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        tools: [{ googleMaps: {} }],
-      },
-    });
-
-    let textResponse = response.text || "[]";
-    textResponse = textResponse.trim();
-    if (textResponse.startsWith("```json")) {
-        textResponse = textResponse.replace(/^```json/, "").replace(/```$/, "");
-    } else if (textResponse.startsWith("```")) {
-        textResponse = textResponse.replace(/^```/, "").replace(/```$/, "");
-    }
-
-    const data = JSON.parse(textResponse);
-
-    // Hydrate with server-side only data (images, map coords)
-    const hydratedData = data.map((item: any) => ({
-      ...item,
-      imageCount: 5,
-      imageUrl: `https://picsum.photos/seed/${item.id}A/800/600`,
-      lat: 50 + (Math.random() * 40),
-      lng: 10 + (Math.random() * 40),
-      rating: item.rating || 4.5,
-      reviewCount: item.reviewCount || Math.floor(Math.random() * 100),
-      amenities: item.amenities || ["Wifi", "Kitchen", "Heating"],
-      address: item.address || `${item.title}, ${city}`
-    }));
-
-    res.json(hydratedData);
-  } catch (error) {
-    console.error("AI Listings Error:", error);
-    res.status(500).json({ error: "Failed to generate listings" });
-  }
-});
-
-app.post("/api/ai/description", async (req, res) => {
-  try {
-    const { title, type, city, amenities } = req.body;
-    const model = "gemini-3-flash-preview";
-    const prompt = `Write a professional, high-converting rental listing description for a ${type} in ${city} titled "${title}". 
-    The space includes these amenities: ${amenities.join(", ")}.
-    The description should be inviting, highlight the benefits of the location and features, and be about 150-200 words.
-    Use a tone that is sophisticated yet approachable.`;
-
-    const response = await genAI.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    res.json({ description: response.text || "No description generated." });
-  } catch (error) {
-    console.error("AI Description Error:", error);
-    res.status(500).json({ error: "Failed to generate description" });
   }
 });
 
