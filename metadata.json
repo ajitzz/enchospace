@@ -1,6 +1,6 @@
 {
-  "name": "ENCHO Space",
-  "description": "An industrial-level rental property marketplace with Neon Postgres, Upstash Redis, and AI-powered hosting features.",
+  "name": "Nestpick Clone",
+  "description": "A rental property finder application replicating the Nestpick UI with Gemini-powered search results.",
   "requestFramePermissions": [
     "geolocation"
   ]

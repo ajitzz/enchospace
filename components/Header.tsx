@@ -1,18 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon, LogOutIcon, ShieldCheckIcon } from './Icons';
-import { User } from '../types';
+import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon } from './Icons';
 
 interface HeaderProps {
   onSearch: (city: string) => void;
   currentCity: string;
   onWishlistClick: () => void;
   onReservesClick: () => void;
-  onAdminClick: () => void;
-  onHostClick: () => void;
-  onLogin: () => void;
-  onLogout: () => void;
-  user: User | null;
   highlightReserves?: boolean;
   highlightWishlist?: boolean;
   reservesCount: number;
@@ -26,11 +20,6 @@ const Header: React.FC<HeaderProps> = ({
     currentCity, 
     onWishlistClick, 
     onReservesClick, 
-    onAdminClick,
-    onHostClick,
-    onLogin,
-    onLogout,
-    user,
     highlightReserves, 
     highlightWishlist,
     reservesCount,
@@ -295,51 +284,12 @@ const Header: React.FC<HeaderProps> = ({
             {/* Desktop Menu Dropdown */}
             {isDesktopMenuOpen && (
                 <div className="absolute right-0 top-full mt-3 w-72 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-gray-100 overflow-hidden animate-fade-in-up origin-top-right z-50">
-                    {!user ? (
-                        <div className="p-2 border-b border-gray-100">
-                            <div 
-                                onClick={() => { onLogin(); setIsDesktopMenuOpen(false); }}
-                                className="p-3 font-semibold text-gray-900 hover:bg-gray-50 rounded-xl cursor-pointer flex items-center gap-3"
-                            >
-                                <LogInIcon className="w-5 h-5" />
-                                Log in
-                            </div>
-                            <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
-                        </div>
-                    ) : (
-                        <div className="p-3 border-b border-gray-100">
-                            <div className="flex items-center gap-3 mb-2 px-1">
-                                <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border border-gray-100" />
-                                <div>
-                                    <p className="font-bold text-sm text-gray-900">{user.displayName}</p>
-                                    <p className="text-[10px] text-gray-500 font-medium">{user.email}</p>
-                                </div>
-                            </div>
-                            {user.role === 'admin' && (
-                                <div 
-                                    onClick={() => { onAdminClick(); setIsDesktopMenuOpen(false); }}
-                                    className="p-3 font-bold text-[#E31C5F] hover:bg-pink-50 rounded-xl cursor-pointer flex items-center gap-3 transition-colors"
-                                >
-                                    <ShieldCheckIcon className="w-5 h-5" />
-                                    Admin Dashboard
-                                </div>
-                            )}
-                            <div 
-                                onClick={() => { onLogout(); setIsDesktopMenuOpen(false); }}
-                                className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer flex items-center gap-3"
-                            >
-                                <LogOutIcon className="w-5 h-5" />
-                                Log out
-                            </div>
-                        </div>
-                    )}
                     <div className="p-2 border-b border-gray-100">
-                         <div 
-                            onClick={() => { onHostClick(); setIsDesktopMenuOpen(false); }}
-                            className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer"
-                         >
-                            Host your space
-                         </div>
+                         <div className="p-3 font-semibold text-gray-900 hover:bg-gray-50 rounded-xl cursor-pointer">Log in</div>
+                         <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
+                    </div>
+                    <div className="p-2 border-b border-gray-100">
+                         <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
                          <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Help Center</div>
                     </div>
                     <div className="p-2">
@@ -408,10 +358,7 @@ const Header: React.FC<HeaderProps> = ({
                       </div>
 
                       {/* Hero: Become a Host */}
-                      <div 
-                        onClick={() => { onHostClick(); setIsMobileMenuOpen(false); }}
-                        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer"
-                      >
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
                           <div className="relative z-10">
                               <h3 className="font-bold text-xl mb-1">Become a Host</h3>
                               <p className="text-white/90 text-sm font-medium mb-3">Earn extra income by renting out your space.</p>

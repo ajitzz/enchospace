@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Listing, NearbyPoint, User } from '../types';
+import { Listing, NearbyPoint } from '../types';
 import { ChevronLeft, StarIcon, ShieldCheck, HeartIcon, MapIcon, ChevronRight, PhoneIcon, MessageCircleIcon, WifiIcon, GymIcon, TrainIcon, ShoppingBagIcon, TreeIcon, CoffeeIcon, ChevronDown, XIcon, CalendarIcon } from './Icons';
 import ListingCard from './ListingCard';
 
@@ -11,7 +11,6 @@ interface ListingDetailsProps {
   isFavorite: boolean;
   onToggleFavorite: (listing: Listing) => void;
   onBook?: (data: any) => void;
-  user?: User | null;
 }
 
 // Helper to map amenities to icons
@@ -155,7 +154,7 @@ const NearbyCategorySection = ({ type, points }: { type: string; points: NearbyP
     );
 };
 
-const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, similarListings, onListingClick, isFavorite, onToggleFavorite, onBook, user }) => {
+const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, similarListings, onListingClick, isFavorite, onToggleFavorite, onBook }) => {
   const [showNav, setShowNav] = useState(true);
   const lastScrollY = useRef(0);
   
@@ -165,21 +164,13 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
   const [config, setConfig] = useState('1 BHK Apartment');
   const [minDate, setMinDate] = useState('');
   
-  // User Details (Pre-filled from user if available)
-  const [guestName, setGuestName] = useState(user?.displayName || '');
-  const [guestPhone, setGuestPhone] = useState(''); // Phone is not in User interface, but we can pre-fill name
-
-  // Update name if user logs in while on this page
-  useEffect(() => {
-    if (user?.displayName && !guestName) {
-        setGuestName(user.displayName);
-    }
-  }, [user, guestName]);
+  // Default User Details (Simulated Login)
+  const [guestName, setGuestName] = useState('Ajit');
+  const [guestPhone, setGuestPhone] = useState('9995864396');
 
   // UI State for Custom Dropdowns
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isMobileConfigOpen, setIsMobileConfigOpen] = useState(false);
-  const [bookingError, setBookingError] = useState<string | null>(null);
   const configDropdownRef = useRef<HTMLDivElement>(null);
 
   // Mobile Booking Sheet State
@@ -234,10 +225,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
   }, []);
 
   const handleBookingAction = () => {
-      setBookingError(null);
-      
       if (!moveInDate) {
-          setBookingError("Please select a move-in date.");
+          alert("Please select a move-in date.");
           return;
       }
 
@@ -246,10 +235,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
           const availability = checkAvailability(currentType, moveInDate);
           
           if (availability.status === 'SOLD_OUT') {
-              // In an industrial app, we might show a "Waitlist" option or similar
-              // For now, we'll just warn the user in the UI
-              setBookingError("This configuration is currently sold out for the selected date.");
-              return;
+              const confirm = window.confirm("This configuration appears to be sold out for the selected date. Do you want to proceed with a request anyway?");
+              if (!confirm) return;
           }
 
           // Move to contact form step with animation
@@ -257,10 +244,9 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
       } else {
           // Perform booking
           if (!guestName || !guestPhone) {
-              setBookingError("Please fill in your name and phone number.");
+              alert("Please fill in your name and phone number.");
               return;
           }
-          
           if (onBook) {
               const maintenanceFee = Math.round(listing.price * 0.10);
               onBook({
@@ -275,10 +261,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
   };
 
   const handleMobileReserve = () => {
-    setBookingError(null);
-    
     if (!moveInDate) {
-        setBookingError("Please select a move-in date.");
+        alert("Please select a move-in date.");
         return;
     }
     
@@ -286,16 +270,14 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
     const availability = checkAvailability(currentType, moveInDate);
     
     if (availability.status === 'SOLD_OUT') {
-         setBookingError("Sold out for the selected date.");
-         return;
+         const confirm = window.confirm("This configuration appears to be sold out for the selected date. Do you want to proceed with a request anyway?");
+         if (!confirm) return;
     }
 
     if (!guestName || !guestPhone) {
-        setBookingError("Please enter your details.");
-        setShowMobileBooking(true); // Ensure sheet is open
+        alert("Please fill in your name and phone number.");
         return;
     }
-
     if (onBook) {
         const maintenanceFee = Math.round(listing.price * 0.10);
         onBook({
@@ -617,14 +599,6 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
                         </div>
                     </div>
 
-                    {/* Error Message */}
-                    {bookingError && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2 text-red-600 text-xs font-bold animate-shake">
-                            <div className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px]">!</div>
-                            {bookingError}
-                        </div>
-                    )}
-
                     {/* CTA Button */}
                     <button 
                         onClick={handleBookingAction}
@@ -883,14 +857,6 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
                         <span className="font-bold text-gray-700">Total /mo</span>
                         <span className="font-extrabold text-xl text-gray-900">{listing.currency}{totalRent.toLocaleString()}</span>
                     </div>
-
-                    {/* Error Message Mobile */}
-                    {bookingError && (
-                        <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2 text-red-600 text-xs font-bold animate-shake">
-                            <div className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px]">!</div>
-                            {bookingError}
-                        </div>
-                    )}
 
                     <button 
                         onClick={handleMobileReserve}
