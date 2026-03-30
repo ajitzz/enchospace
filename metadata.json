@@ -1,0 +1,7 @@
+{
+  "name": "ENCHO Space",
+  "description": "An industrial-level rental property marketplace with Neon Postgres, Upstash Redis, and AI-powered hosting features.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
