@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon } from './Icons';
 
 interface HeaderProps {
@@ -25,6 +26,7 @@ const Header: React.FC<HeaderProps> = ({
     reservesCount,
     wishlistCount
 }) => {
+  const navigate = useNavigate();
   const [inputValue, setInputValue] = useState(currentCity);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -86,6 +88,7 @@ const Header: React.FC<HeaderProps> = ({
           onClick={() => {
               setInputValue('');
               onSearch('Berlin'); // Reset to default/home
+              navigate('/');
           }}
           className="flex flex-col justify-center leading-none cursor-pointer group shrink-0 select-none md:min-w-[120px]"
         >
@@ -289,7 +292,8 @@ const Header: React.FC<HeaderProps> = ({
                          <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
                     </div>
                     <div className="p-2 border-b border-gray-100">
-                         <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
+                         <div onClick={() => navigate('/host')} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
+                         <div onClick={() => navigate('/admin')} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Admin Panel</div>
                          <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Help Center</div>
                     </div>
                     <div className="p-2">
@@ -358,13 +362,21 @@ const Header: React.FC<HeaderProps> = ({
                       </div>
 
                       {/* Hero: Become a Host */}
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
+                      <div onClick={() => { setIsMobileMenuOpen(false); navigate('/host'); }} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
                           <div className="relative z-10">
                               <h3 className="font-bold text-xl mb-1">Become a Host</h3>
                               <p className="text-white/90 text-sm font-medium mb-3">Earn extra income by renting out your space.</p>
                               <div className="bg-white/20 backdrop-blur-md self-start inline-block px-3 py-1.5 rounded-lg text-xs font-bold">List your space</div>
                           </div>
                           <HouseIcon className="absolute -bottom-4 -right-4 w-24 h-24 text-white/10" />
+                      </div>
+
+                      {/* Admin Link */}
+                      <div onClick={() => { setIsMobileMenuOpen(false); navigate('/admin'); }} className="relative overflow-hidden rounded-2xl bg-black text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
+                          <div className="relative z-10">
+                              <h3 className="font-bold text-xl mb-1">Admin Panel</h3>
+                              <p className="text-white/90 text-sm font-medium mb-3">Manage properties and users.</p>
+                          </div>
                       </div>
 
                       {/* Navigation Links */}
