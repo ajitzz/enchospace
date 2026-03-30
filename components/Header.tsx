@@ -7,6 +7,8 @@ interface HeaderProps {
   currentCity: string;
   onWishlistClick: () => void;
   onReservesClick: () => void;
+  onHostClick: () => void;
+  onAdminClick: () => void;
   highlightReserves?: boolean;
   highlightWishlist?: boolean;
   reservesCount: number;
@@ -20,6 +22,8 @@ const Header: React.FC<HeaderProps> = ({
     currentCity, 
     onWishlistClick, 
     onReservesClick, 
+    onHostClick,
+    onAdminClick,
     highlightReserves, 
     highlightWishlist,
     reservesCount,
@@ -289,7 +293,8 @@ const Header: React.FC<HeaderProps> = ({
                          <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
                     </div>
                     <div className="p-2 border-b border-gray-100">
-                         <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
+                         <div onClick={onHostClick} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
+                         <div onClick={onAdminClick} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Admin Control</div>
                          <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Help Center</div>
                     </div>
                     <div className="p-2">
@@ -358,7 +363,7 @@ const Header: React.FC<HeaderProps> = ({
                       </div>
 
                       {/* Hero: Become a Host */}
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
+                      <div onClick={() => { setIsMobileMenuOpen(false); onHostClick(); }} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">
                           <div className="relative z-10">
                               <h3 className="font-bold text-xl mb-1">Become a Host</h3>
                               <p className="text-white/90 text-sm font-medium mb-3">Earn extra income by renting out your space.</p>
