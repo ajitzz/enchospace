@@ -11,7 +11,6 @@ import BookingPage from '../components/BookingPage';
 import ReservationsPage from '../components/ReservationsPage';
 import FlyToAnimation from '../components/FlyToAnimation';
 import { MapIcon, ListIcon } from '../components/Icons';
-import { fetchListingsForCity } from '../services/geminiService';
 import { Listing, Room, NearbyPoint } from '../types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
@@ -65,7 +64,7 @@ export default function Home() {
     setSelectedListing(null);
     try {
         // Fetch from DB
-        const dbRes = await fetch('/api/properties');
+        const dbRes = await fetch(`/api/properties?city=${encodeURIComponent(searchCity)}`);
         let dbListings = [];
         if (dbRes.ok) {
             const dbData = await dbRes.json();
@@ -76,8 +75,8 @@ export default function Home() {
                 currency: '$',
                 period: 'night',
                 type: 'APARTMENT',
-                imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
-                imageCount: p.images?.length || 1,
+                imageUrl: p.assets?.[0]?.url || `https://picsum.photos/seed/${p.id}/800/600`,
+                imageCount: p.assets?.length || 1,
                 provider: 'Host',
                 isVerified: true,
                 discount: 0,
@@ -89,9 +88,7 @@ export default function Home() {
             }));
         }
 
-        // Fetch from Gemini
-        const data = await fetchListingsForCity(searchCity);
-        setListings([...dbListings, ...data]);
+        setListings(dbListings);
     } catch (e) {
         console.error("Failed to load listings", e);
     } finally {

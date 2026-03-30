@@ -1,4 +1,12 @@
 
+export interface ListingAsset {
+  url: string;
+  key?: string;
+  type?: string;
+  name?: string;
+}
+
+
 export interface Room {
   id: string;
   name: string;
@@ -34,6 +42,7 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
+  assets?: ListingAsset[];
   
   // Detailed fields
   description?: string;
