@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Shield, Trash2, Edit, Plus, Users, Home, CreditCard } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/');
+      } else {
+        setUser(session.user);
+      }
+    });
+
     fetch('/api/properties')
       .then(res => res.json())
       .then(data => {

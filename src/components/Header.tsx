@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon } from './Icons';
 
 interface HeaderProps {
@@ -32,6 +33,7 @@ const Header: React.FC<HeaderProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   
   const searchRef = useRef<HTMLFormElement>(null);
   const desktopMenuRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,16 @@ const Header: React.FC<HeaderProps> = ({
     : POPULAR_CITIES.filter(city => city.toLowerCase().includes(inputValue.toLowerCase()));
 
   useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -57,8 +69,21 @@ const Header: React.FC<HeaderProps> = ({
     return () => {
       window.removeEventListener('scroll', handleScroll);
       document.removeEventListener('mousedown', handleClickOutside);
+      subscription.unsubscribe();
     };
   }, []);
+
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+    });
+    if (error) console.error('Login error:', error.message);
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error('Logout error:', error.message);
+  };
 
   const handleSubmit = (e: React.FormEvent, cityOverride?: string) => {
     e.preventDefault();
@@ -288,8 +313,17 @@ const Header: React.FC<HeaderProps> = ({
             {isDesktopMenuOpen && (
                 <div className="absolute right-0 top-full mt-3 w-72 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-gray-100 overflow-hidden animate-fade-in-up origin-top-right z-50">
                     <div className="p-2 border-b border-gray-100">
-                         <div className="p-3 font-semibold text-gray-900 hover:bg-gray-50 rounded-xl cursor-pointer">Log in</div>
-                         <div className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
+                        {user ? (
+                          <>
+                            <div className="p-3 font-semibold text-gray-900 rounded-xl">Hi, {user.email?.split('@')[0]}</div>
+                            <div onClick={handleLogout} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Log out</div>
+                          </>
+                        ) : (
+                          <>
+                            <div onClick={handleLogin} className="p-3 font-semibold text-gray-900 hover:bg-gray-50 rounded-xl cursor-pointer">Log in</div>
+                            <div onClick={handleLogin} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Sign up</div>
+                          </>
+                        )}
                     </div>
                     <div className="p-2 border-b border-gray-100">
                          <div onClick={() => navigate('/host')} className="p-3 font-medium text-gray-700 hover:bg-gray-50 rounded-xl cursor-pointer">Host your space</div>
@@ -350,16 +384,31 @@ const Header: React.FC<HeaderProps> = ({
                   <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
                       
                       {/* Account Actions */}
-                      <div className="grid grid-cols-2 gap-3">
-                          <button className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-50 border border-gray-100 active:scale-95 transition-transform">
-                              <LogInIcon className="w-6 h-6 text-gray-700 mb-2" />
-                              <span className="font-bold text-gray-900 text-sm">Log in</span>
+                      {user ? (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                            <div className="w-10 h-10 bg-black rounded-full text-white flex items-center justify-center">
+                              <UserIcon className="w-5 h-5" />
+                            </div>
+                            <div className="font-bold text-gray-900 text-sm truncate">{user.email?.split('@')[0]}</div>
+                          </div>
+                          <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-gray-100 text-gray-700 font-bold text-sm active:scale-95 transition-transform">
+                            <LogInIcon className="w-5 h-5" />
+                            Log out
                           </button>
-                          <button className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-900 text-white active:scale-95 transition-transform shadow-md">
-                              <UserIcon className="w-6 h-6 mb-2" />
-                              <span className="font-bold text-sm">Sign up</span>
-                          </button>
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                            <button onClick={handleLogin} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-50 border border-gray-100 active:scale-95 transition-transform">
+                                <LogInIcon className="w-6 h-6 text-gray-700 mb-2" />
+                                <span className="font-bold text-gray-900 text-sm">Log in</span>
+                            </button>
+                            <button onClick={handleLogin} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-900 text-white active:scale-95 transition-transform shadow-md">
+                                <UserIcon className="w-6 h-6 mb-2" />
+                                <span className="font-bold text-sm">Sign up</span>
+                            </button>
+                        </div>
+                      )}
 
                       {/* Hero: Become a Host */}
                       <div onClick={() => { setIsMobileMenuOpen(false); navigate('/host'); }} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E31C5F] to-orange-500 text-white p-6 shadow-lg active:scale-[0.98] transition-transform cursor-pointer">

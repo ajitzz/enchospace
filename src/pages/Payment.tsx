@@ -11,6 +11,19 @@ export default function Payment() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  React.useEffect(() => {
+    // Check if we returned from Stripe checkout
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('success')) {
+      setSuccess(true);
+      // In a real app, we would verify the session and create the booking here or via webhook
+      setTimeout(() => navigate('/'), 3000);
+    }
+    if (query.get('canceled')) {
+      alert('Payment was canceled.');
+    }
+  }, [navigate]);
+
   if (!listing || !bookingDetails) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -28,31 +41,49 @@ export default function Payment() {
     e.preventDefault();
     setIsProcessing(true);
     
-    // Simulate payment processing
-    setTimeout(async () => {
-      try {
-        const res = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            property_id: listing.id,
-            user_name: bookingDetails.name,
-            user_phone: bookingDetails.phone,
-            start_date: bookingDetails.moveInDate,
-            end_date: bookingDetails.moveInDate, // Simplified for now
-            total_price: bookingDetails.totalRent,
-          }),
-        });
-        if (res.ok) {
-          setSuccess(true);
-          setTimeout(() => navigate('/'), 3000);
-        }
-      } catch (err) {
-        console.error('Payment failed', err);
-      } finally {
-        setIsProcessing(false);
+    try {
+      // 1. Create booking in pending state
+      const bookingRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          property_id: listing.id,
+          user_name: bookingDetails.name,
+          user_phone: bookingDetails.phone,
+          start_date: bookingDetails.moveInDate,
+          end_date: bookingDetails.moveOutDate,
+          total_price: bookingDetails.totalRent,
+        }),
+      });
+      
+      if (!bookingRes.ok) throw new Error('Failed to create booking');
+      const booking = await bookingRes.json();
+
+      // 2. Create Stripe checkout session
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          property_id: listing.id,
+          title: listing.title,
+          user_name: bookingDetails.name,
+          total_price: bookingDetails.totalRent,
+          booking_id: booking.id,
+        }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to create checkout session');
+      
+      const { url } = await res.json();
+      if (url) {
+        window.location.href = url;
       }
-    }, 2000);
+    } catch (err) {
+      console.error('Payment failed', err);
+      alert('Failed to initiate payment. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -92,39 +123,8 @@ export default function Payment() {
             ) : (
               <form onSubmit={handlePayment} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Card Information</label>
-                  <div className="border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-black focus-within:border-transparent transition-all">
-                    <input 
-                      required
-                      type="text" 
-                      className="w-full px-4 py-3 border-b border-gray-200 outline-none"
-                      placeholder="Card number"
-                    />
-                    <div className="flex">
-                      <input 
-                        required
-                        type="text" 
-                        className="w-1/2 px-4 py-3 border-r border-gray-200 outline-none"
-                        placeholder="MM / YY"
-                      />
-                      <input 
-                        required
-                        type="text" 
-                        className="w-1/2 px-4 py-3 outline-none"
-                        placeholder="CVC"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Name on Card</label>
-                  <input 
-                    required
-                    type="text" 
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all"
-                    placeholder="John Doe"
-                  />
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Payment Method</label>
+                  <p className="text-sm text-gray-500 mb-4">You will be redirected to Stripe to complete your secure payment.</p>
                 </div>
 
                 <button 
@@ -133,7 +133,7 @@ export default function Payment() {
                   className="w-full bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-all active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
-                    'Processing...'
+                    'Redirecting to Stripe...'
                   ) : (
                     <>
                       <Lock className="w-5 h-5" /> Pay ${bookingDetails.totalRent}

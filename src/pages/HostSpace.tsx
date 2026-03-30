@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Home, Upload, DollarSign, MapPin, CheckCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function HostSpace() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/');
+      } else {
+        setUser(session.user);
+      }
+    });
+  }, [navigate]);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -14,6 +27,40 @@ export default function HostSpace() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      // 1. Get presigned URL
+      const res = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl, fileUrl } = await res.json();
+
+      // 2. Upload file to S3
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      // 3. Add to form data
+      setFormData(prev => ({ ...prev, images: [...prev.images, fileUrl] }));
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +73,7 @@ export default function HostSpace() {
           ...formData,
           price: parseFloat(formData.price),
           images: formData.images.length > 0 ? formData.images : ['https://picsum.photos/seed/property/800/600'],
+          owner_id: user?.id || 'anonymous',
         }),
       });
       if (res.ok) {
@@ -125,12 +173,28 @@ export default function HostSpace() {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Upload Images (AWS S3 Integration Pending)</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Upload Images</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer relative">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
                   <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                  <p className="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
+                  <p className="text-sm text-gray-600 font-medium">
+                    {uploadingImage ? 'Uploading...' : 'Click to upload or drag and drop'}
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">SVG, PNG, JPG or GIF (max. 800x400px)</p>
                 </div>
+                {formData.images.length > 0 && (
+                  <div className="flex gap-4 mt-4 overflow-x-auto pb-2">
+                    {formData.images.map((url, i) => (
+                      <img key={i} src={url} alt={`Upload ${i}`} className="w-24 h-24 object-cover rounded-xl shadow-sm" />
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button 
