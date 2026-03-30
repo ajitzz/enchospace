@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS users (
   uid TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT, -- Added for custom auth
   display_name TEXT,
   photo_url TEXT,
   role TEXT DEFAULT 'user', -- 'user', 'admin', 'super_admin'

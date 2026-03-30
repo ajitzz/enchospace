@@ -31,16 +31,16 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Listing, AdminStats } from '../types';
 import { generateListingDescription } from '../services/geminiService';
+import { useAuth } from '../AuthContext';
 
 interface AdminDashboardProps {
   onBack: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'listings' | 'bookings' | 'stats' | 'users' | 'payments'>('stats');
   const [listings, setListings] = useState<Listing[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -50,7 +50,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [userRole, setUserRole] = useState<string>('user');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [userRole, setUserRole] = useState<string>(currentUser?.role || 'user');
 
   const [newListing, setNewListing] = useState<Partial<Listing>>({
     title: '',
@@ -89,30 +90,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
   useEffect(() => {
     fetchData();
-    checkRole();
-  }, [activeTab]);
-
-  const checkRole = async () => {
-    if (!auth.currentUser) return;
-    const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', auth.currentUser.uid)));
-    if (!userSnap.empty) {
-        setUserRole(userSnap.docs[0].data().role);
+    if (currentUser) {
+      setUserRole(currentUser.role);
     }
-  };
+  }, [activeTab, currentUser]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       if (activeTab === 'listings') {
-        const q = userRole === 'super_admin' 
-          ? query(collection(db, 'listings'))
-          : query(collection(db, 'listings'), where('ownerId', '==', auth.currentUser?.uid));
-        
-        const snap = await getDocs(q);
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
-        setListings(data);
+        const res = await fetch('/api/listings');
+        const data = await res.json();
+        // Filter if not super_admin (though backend should ideally handle this)
+        const filteredData = userRole === 'super_admin' 
+          ? data 
+          : data.filter((l: Listing) => l.ownerId === currentUser?.uid);
+        setListings(filteredData);
       } else if (activeTab === 'bookings' || activeTab === 'payments') {
-        const response = await fetch('/api/reservations');
+        const url = userRole === 'super_admin' 
+          ? '/api/reservations' 
+          : `/api/reservations?ownerId=${currentUser?.uid}`;
+        const response = await fetch(url);
         const data = await response.json();
         setBookings(data);
       } else if (activeTab === 'users') {
@@ -132,13 +130,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   };
 
   const handleAddListing = async () => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
     setIsSaving(true);
     try {
       const listingData = {
         ...(editingListing || newListing),
-        ownerId: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
+        ownerId: currentUser.uid,
         rating: 4.5,
         reviewCount: 0,
         isVerified: true,
@@ -146,32 +143,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       };
       
       if (editingListing) {
-        // Update Postgres
         await fetch(`/api/listings/${editingListing.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(listingData)
         });
-        // Update Firestore
-        await updateDoc(doc(db, 'listings', editingListing.id), listingData);
       } else {
-        // Save to Postgres via API
-        const res = await fetch('/api/listings', {
+        await fetch('/api/listings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(listingData)
         });
-        const savedListing = await res.json();
-
-        // Save to Firestore for real-time sync (using same ID if possible or just add)
-        await addDoc(collection(db, 'listings'), { ...listingData, postgresId: savedListing.id });
       }
       
       setShowAddModal(false);
       setEditingListing(null);
       fetchData();
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'listings');
+      console.error("Save Listing Error:", e);
     } finally {
       setIsSaving(false);
     }
@@ -180,13 +169,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this listing?")) return;
     try {
-      // Delete from Postgres
       await fetch(`/api/listings/${id}`, { method: 'DELETE' });
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'listings', id));
       setListings(prev => prev.filter(l => l.id !== id));
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'listings');
+      console.error("Delete Listing Error:", e);
     }
   };
 
@@ -197,8 +183,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role })
       });
-      // Update Firestore role as well
-      await updateDoc(doc(db, 'users', uid), { role });
       fetchData();
     } catch (e) {
       console.error("Update Role Error:", e);
@@ -600,44 +584,61 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden"
+              className="space-y-6"
             >
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Transaction ID</th>
-                    <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Property</th>
-                    <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Amount</th>
-                    <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Date</th>
-                    <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.map((booking) => (
-                    <tr key={booking.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-8 py-6">
-                        <p className="font-mono text-xs font-bold text-gray-400">TXN-{booking.id.substring(0, 8).toUpperCase()}</p>
-                      </td>
-                      <td className="px-8 py-6">
-                        <p className="font-bold text-sm">{booking.listing_title}</p>
-                      </td>
-                      <td className="px-8 py-6">
-                        <p className="font-bold text-sm text-green-600">€{booking.total_rent}</p>
-                      </td>
-                      <td className="px-8 py-6">
-                        <p className="text-sm text-gray-500">{new Date(booking.move_in_date).toLocaleDateString()}</p>
-                      </td>
-                      <td className="px-8 py-6">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                          booking.status === 'confirmed' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
-                        }`}>
-                          {booking.status}
-                        </span>
-                      </td>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Payouts</p>
+                  <p className="text-2xl font-black text-gray-900">€{bookings.filter(b => b.status === 'confirmed').reduce((acc, b) => acc + parseFloat(b.total_rent), 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Pending Volume</p>
+                  <p className="text-2xl font-black text-gray-900">€{bookings.filter(b => b.status === 'pending').reduce((acc, b) => acc + parseFloat(b.total_rent), 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Successful Trans.</p>
+                  <p className="text-2xl font-black text-gray-900">{bookings.filter(b => b.status === 'confirmed').length}</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Transaction ID</th>
+                      <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Property</th>
+                      <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Amount</th>
+                      <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Date</th>
+                      <th className="px-8 py-6 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {bookings.map((booking) => (
+                      <tr key={booking.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-8 py-6">
+                          <p className="font-mono text-xs font-bold text-gray-400">TXN-{booking.id.substring(0, 8).toUpperCase()}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <p className="font-bold text-sm">{booking.listing_title}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <p className="font-bold text-sm text-green-600">€{booking.total_rent}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <p className="text-sm text-gray-500">{new Date(booking.move_in_date).toLocaleDateString()}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                            booking.status === 'confirmed' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
+                          }`}>
+                            {booking.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
