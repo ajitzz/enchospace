@@ -1,18 +1,7 @@
 
 import React from 'react';
-import { Listing } from '../types';
+import { Listing, Reservation } from '../types';
 import { ChevronLeft, CalendarIcon, ChevronRight, PhoneIcon, MessageCircleIcon } from './Icons';
-
-interface Reservation {
-  id: string;
-  listing: Listing;
-  moveInDate: string;
-  configuration: string;
-  name: string;
-  phone: string;
-  totalRent: number;
-  bookingDate: string;
-}
 
 interface ReservationsPageProps {
   reservations: Reservation[];

@@ -14,8 +14,7 @@ import {
   Loader2Icon,
   SparklesIcon
 } from 'lucide-react';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { handleDbError, OperationType, isSupabaseConfigured, getAuthUser, fetchRows, insertRow, deleteRows } from '../supabase';
 import { Listing, AdminStats } from '../types';
 
 interface AdminDashboardProps {
@@ -49,11 +48,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
   const fetchListings = async () => {
     setLoading(true);
+    if (!isSupabaseConfigured) {
+      setListings([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const q = query(collection(db, 'listings'), where('ownerId', '==', auth.currentUser?.uid));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
-      setListings(data);
+      const authUser = await getAuthUser();
+      if (!authUser) {
+        setListings([]);
+        return;
+      }
+
+      const data = await fetchRows('listings', `ownerId=eq.${encodeURIComponent(authUser.id)}&select=*`);
+      setListings((data || []) as Listing[]);
     } catch (e) {
       console.error("Fetch Error:", e);
     } finally {
@@ -62,35 +70,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   };
 
   const handleAddListing = async () => {
-    if (!auth.currentUser) return;
+    if (!isSupabaseConfigured) return;
     setIsSaving(true);
     try {
+      const authUser = await getAuthUser();
+      if (!authUser) return;
+
       const listingData = {
         ...newListing,
-        ownerId: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
+        ownerId: authUser.id,
+        createdAt: new Date().toISOString(),
         rating: 4.5,
         reviewCount: 0,
         isVerified: true,
         imageCount: 5
       };
-      await addDoc(collection(db, 'listings'), listingData);
+      await insertRow('listings', listingData);
       setShowAddModal(false);
       fetchListings();
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'listings');
+      handleDbError(e, OperationType.CREATE, 'listings');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
+    if (!isSupabaseConfigured) return;
     if (!confirm("Are you sure you want to delete this listing?")) return;
     try {
-      await deleteDoc(doc(db, 'listings', id));
+      await deleteRows('listings', `id=eq.${encodeURIComponent(id)}`);
       setListings(prev => prev.filter(l => l.id !== id));
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'listings');
+      handleDbError(e, OperationType.DELETE, 'listings');
     }
   };
 
