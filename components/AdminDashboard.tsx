@@ -31,8 +31,6 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Listing, AdminStats } from '../types';
 import { generateListingDescription } from '../services/geminiService';
 
@@ -50,7 +48,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [userRole, setUserRole] = useState<string>('user');
+  const [userRole, setUserRole] = useState<string>('super_admin');
 
   const [newListing, setNewListing] = useState<Partial<Listing>>({
     title: '',
@@ -93,10 +91,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   }, [activeTab]);
 
   const checkRole = async () => {
-    if (!auth.currentUser) return;
-    const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', auth.currentUser.uid)));
-    if (!userSnap.empty) {
-        setUserRole(userSnap.docs[0].data().role);
+    const raw = localStorage.getItem('enchospace_user');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { role?: string };
+      setUserRole(parsed.role || 'user');
+    } catch {
+      setUserRole('user');
     }
   };
 
@@ -104,12 +105,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     setLoading(true);
     try {
       if (activeTab === 'listings') {
-        const q = userRole === 'super_admin' 
-          ? query(collection(db, 'listings'))
-          : query(collection(db, 'listings'), where('ownerId', '==', auth.currentUser?.uid));
-        
-        const snap = await getDocs(q);
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
+        const response = await fetch('/api/listings');
+        const data = await response.json();
         setListings(data);
       } else if (activeTab === 'bookings' || activeTab === 'payments') {
         const response = await fetch('/api/reservations');
@@ -132,13 +129,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   };
 
   const handleAddListing = async () => {
-    if (!auth.currentUser) return;
     setIsSaving(true);
     try {
+      const raw = localStorage.getItem('enchospace_user');
+      const currentUser = raw ? JSON.parse(raw) : null;
       const listingData = {
         ...(editingListing || newListing),
-        ownerId: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
+        ownerId: currentUser?.uid || 'anonymous',
+        createdAt: new Date().toISOString(),
         rating: 4.5,
         reviewCount: 0,
         isVerified: true,
@@ -152,26 +150,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(listingData)
         });
-        // Update Firestore
-        await updateDoc(doc(db, 'listings', editingListing.id), listingData);
       } else {
-        // Save to Postgres via API
-        const res = await fetch('/api/listings', {
+        await fetch('/api/listings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(listingData)
         });
-        const savedListing = await res.json();
-
-        // Save to Firestore for real-time sync (using same ID if possible or just add)
-        await addDoc(collection(db, 'listings'), { ...listingData, postgresId: savedListing.id });
       }
       
       setShowAddModal(false);
       setEditingListing(null);
       fetchData();
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'listings');
+      console.error('Save listing failed:', e);
     } finally {
       setIsSaving(false);
     }
@@ -180,13 +171,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this listing?")) return;
     try {
-      // Delete from Postgres
       await fetch(`/api/listings/${id}`, { method: 'DELETE' });
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'listings', id));
       setListings(prev => prev.filter(l => l.id !== id));
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'listings');
+      console.error('Delete listing failed:', e);
     }
   };
 
@@ -197,8 +185,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role })
       });
-      // Update Firestore role as well
-      await updateDoc(doc(db, 'users', uid), { role });
       fetchData();
     } catch (e) {
       console.error("Update Role Error:", e);

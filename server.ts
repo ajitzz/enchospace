@@ -8,6 +8,7 @@ import pg from "pg";
 import Stripe from "stripe";
 import Redis from "ioredis";
 import cron from "node-cron";
+import { generateDescription, generateListingsForCity } from "./lib/gemini";
 
 dotenv.config();
 
@@ -35,10 +36,38 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY) 
   : null;
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: "1mb" }));
 
 // --- API ROUTES ---
+
+
+// 0. AI API (server-side Gemini only)
+app.get("/api/ai/listings", async (req, res) => {
+  try {
+    const city = (req.query.city as string) || "Berlin";
+    const listings = await generateListingsForCity(city);
+    res.json(listings);
+  } catch (error) {
+    console.error("AI Listings Error:", error);
+    res.status(500).json({ error: "Failed to generate listings" });
+  }
+});
+
+app.post("/api/ai/description", async (req, res) => {
+  try {
+    const { title, type, city, amenities } = req.body || {};
+    if (!title || !type || !city || !Array.isArray(amenities)) {
+      return res.status(400).json({ error: "Invalid request payload" });
+    }
+
+    const description = await generateDescription({ title, type, city, amenities });
+    res.json({ description });
+  } catch (error) {
+    console.error("AI Description Error:", error);
+    res.status(500).json({ error: "Failed to generate description" });
+  }
+});
 
 // 1. Listings API
 app.get("/api/listings", async (req, res) => {
