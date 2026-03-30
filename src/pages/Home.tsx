@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import FilterBar from '../components/FilterBar';
-import ListingCard from '../components/ListingCard';
-import MapSidebar from '../components/MapSidebar';
-import ListingDetails from '../components/ListingDetails';
-import WishlistPage from '../components/WishlistPage';
-import BookingPage from '../components/BookingPage';
-import ReservationsPage from '../components/ReservationsPage';
-import FlyToAnimation from '../components/FlyToAnimation';
-import { MapIcon, ListIcon } from '../components/Icons';
+import Header from '../../components/Header';
+import FilterBar from '../../components/FilterBar';
+import ListingCard from '../../components/ListingCard';
+import MapSidebar from '../../components/MapSidebar';
+import ListingDetails from '../../components/ListingDetails';
+import WishlistPage from '../../components/WishlistPage';
+import BookingPage from '../../components/BookingPage';
+import ReservationsPage from '../../components/ReservationsPage';
+import FlyToAnimation from '../../components/FlyToAnimation';
+import { MapIcon, ListIcon } from '../../components/Icons';
 import { Listing, Room, NearbyPoint } from '../types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
