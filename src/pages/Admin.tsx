@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Shield, Trash2, Edit, Plus, Users, Home, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchApi, fetchJson } from '../lib/api';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function Admin() {
     if (!window.confirm('Are you sure you want to delete this property?')) return;
     
     try {
-      const res = await fetch(`/api/properties/${id}`, { method: 'DELETE' });
+      const res = await fetchApi(`/api/properties/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setProperties(prev => prev.filter((p: any) => p.id !== id));
       } else {
@@ -35,11 +36,7 @@ export default function Admin() {
       }
     });
 
-    fetch('/api/properties')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch properties');
-        return res.json();
-      })
+    fetchJson<any[]>('/api/properties')
       .then(data => {
         setProperties(data);
         setLoading(false);
