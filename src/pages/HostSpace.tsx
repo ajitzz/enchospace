@@ -29,37 +29,48 @@ export default function HostSpace() {
   const [success, setSuccess] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setUploadingImage(true);
     try {
-      // 1. Get presigned URL
-      const res = await fetch('/api/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
-      });
-      
-      if (!res.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, fileUrl } = await res.json();
+      const uploadPromises = Array.from(files).map(async (file: File) => {
+        // 1. Get presigned URL
+        const res = await fetch('/api/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+        });
+        
+        if (!res.ok) throw new Error('Failed to get upload URL');
+        const { uploadUrl, fileUrl } = await res.json();
 
-      // 2. Upload file to S3
-      await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        // 2. Upload file to S3
+        await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+
+        return fileUrl;
       });
 
-      // 3. Add to form data
-      setFormData(prev => ({ ...prev, images: [...prev.images, fileUrl] }));
+      const uploadedUrls = await Promise.all(uploadPromises);
+      setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Failed to upload image. Please try again.');
+      alert('Failed to upload some files. Please try again.');
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  const removeFile = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,8 +188,9 @@ export default function HostSpace() {
                 <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer relative">
                   <input 
                     type="file" 
+                    multiple
                     accept="image/*,video/*,audio/*,.pdf,.doc,.docx" 
-                    onChange={handleImageUpload}
+                    onChange={handleFileUpload}
                     disabled={uploadingImage}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   />
@@ -189,14 +201,28 @@ export default function HostSpace() {
                   <p className="text-xs text-gray-400 mt-1">Images, Videos, Audio, PDF, DOCX</p>
                 </div>
                 {formData.images.length > 0 && (
-                  <div className="flex gap-4 mt-4 overflow-x-auto pb-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
                     {formData.images.map((url, i) => {
                       const isImage = url.match(/\.(jpeg|jpg|gif|png|svg)$/i) != null || url.includes('image');
-                      return isImage ? (
-                        <img key={i} src={url} alt={`Upload ${i}`} className="w-24 h-24 object-cover rounded-xl shadow-sm" />
-                      ) : (
-                        <div key={i} className="w-24 h-24 bg-gray-100 rounded-xl shadow-sm flex items-center justify-center text-xs text-gray-500 overflow-hidden text-ellipsis p-2 text-center">
-                          {url.split('/').pop()}
+                      const isVideo = url.match(/\.(mp4|webm|ogg)$/i) != null || url.includes('video');
+                      return (
+                        <div key={i} className="relative group aspect-square">
+                          {isImage ? (
+                            <img src={url} alt={`Upload ${i}`} className="w-full h-full object-cover rounded-xl shadow-sm border border-gray-100" />
+                          ) : isVideo ? (
+                            <video src={url} className="w-full h-full object-cover rounded-xl shadow-sm border border-gray-100" />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 rounded-xl shadow-sm flex items-center justify-center text-[10px] text-gray-500 overflow-hidden p-2 text-center border border-gray-100">
+                              <span className="truncate">{url.split('/').pop()}</span>
+                            </div>
+                          )}
+                          <button 
+                            type="button"
+                            onClick={() => removeFile(i)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                          </button>
                         </div>
                       );
                     })}

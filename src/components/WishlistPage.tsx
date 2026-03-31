@@ -6,7 +6,7 @@ interface Props {
   favorites: Listing[];
   onBack: () => void;
   onListingClick: (listing: Listing) => void;
-  onToggleFavorite: (id: string) => void;
+  onToggleFavorite: (listing: Listing) => void;
 }
 
 export default function WishlistPage({ favorites, onBack, onListingClick, onToggleFavorite }: Props) {

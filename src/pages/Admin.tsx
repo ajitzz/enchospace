@@ -10,6 +10,22 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
+  const deleteProperty = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this property?')) return;
+    
+    try {
+      const res = await fetch(`/api/properties/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProperties(prev => prev.filter((p: any) => p.id !== id));
+      } else {
+        alert('Failed to delete property');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting property');
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
@@ -20,7 +36,10 @@ export default function Admin() {
     });
 
     fetch('/api/properties')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch properties');
+        return res.json();
+      })
       .then(data => {
         setProperties(data);
         setLoading(false);
@@ -29,7 +48,7 @@ export default function Admin() {
         console.error(err);
         setLoading(false);
       });
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -115,7 +134,10 @@ export default function Admin() {
                             <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                               <Edit className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <button 
+                              onClick={() => deleteProperty(prop.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
