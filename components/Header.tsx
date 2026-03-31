@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MailIcon, HouseIcon, LogInIcon } from './Icons';
+import { SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, NavigationIcon, MapIcon, XIcon, PhoneIcon, MessageCircleIcon, MailIcon, HouseIcon, LogInIcon } from './Icons';
 
 interface HeaderProps {
   onSearch: (city: string) => void;
@@ -295,6 +295,10 @@ const Header: React.FC<HeaderProps> = ({
                     <div className="p-2">
                         <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Contact Us</div>
                         <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer">
+                            <MessageCircleIcon className="w-5 h-5 text-green-600" />
+                            <span className="text-sm font-medium text-gray-700">WhatsApp</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer">
                             <PhoneIcon className="w-5 h-5 text-gray-600" />
                             <span className="text-sm font-medium text-gray-700">Call Support</span>
                         </div>
@@ -389,6 +393,13 @@ const Header: React.FC<HeaderProps> = ({
                       <div className="mt-auto pt-6 border-t border-gray-100">
                           <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Contact & Support</h4>
                           <div className="space-y-3">
+                              <button className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition-colors">
+                                  <MessageCircleIcon className="w-5 h-5" />
+                                  <div className="flex flex-col items-start">
+                                      <span className="text-xs font-semibold opacity-70">WhatsApp</span>
+                                      <span className="font-bold">+1 234 567 890</span>
+                                  </div>
+                              </button>
                               <div className="grid grid-cols-2 gap-3">
                                   <button className="flex items-center justify-center gap-2 p-3.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 transition-colors">
                                       <PhoneIcon className="w-4 h-4" />

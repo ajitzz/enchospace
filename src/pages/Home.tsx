@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../../components/Header';
-import FilterBar from '../../components/FilterBar';
-import ListingCard from '../../components/ListingCard';
-import MapSidebar from '../../components/MapSidebar';
-import ListingDetails from '../../components/ListingDetails';
-import WishlistPage from '../../components/WishlistPage';
-import BookingPage from '../../components/BookingPage';
-import ReservationsPage from '../../components/ReservationsPage';
-import FlyToAnimation from '../../components/FlyToAnimation';
-import { MapIcon, ListIcon } from '../../components/Icons';
+import Header from '../components/Header';
+import FilterBar from '../components/FilterBar';
+import ListingCard from '../components/ListingCard';
+import MapSidebar from '../components/MapSidebar';
+import ListingDetails from '../components/ListingDetails';
+import WishlistPage from '../components/WishlistPage';
+import BookingPage from '../components/BookingPage';
+import ReservationsPage from '../components/ReservationsPage';
+import FlyToAnimation from '../components/FlyToAnimation';
+import { MapIcon, ListIcon } from '../components/Icons';
+import { fetchListingsForCity } from '../services/geminiService';
 import { Listing, Room, NearbyPoint } from '../types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
@@ -64,34 +65,35 @@ export default function Home() {
     setSelectedListing(null);
     try {
         // Fetch from DB
-        const dbRes = await fetch(`/api/properties?city=${encodeURIComponent(searchCity)}`);
+        const dbRes = await fetch('/api/properties');
         let dbListings = [];
         if (dbRes.ok) {
             const dbData = await dbRes.json();
             dbListings = dbData.map((p: any) => ({
                 id: p.id.toString(),
                 title: p.title,
-                price: Number(p.price),
+                price: p.price,
                 currency: '$',
                 period: 'night',
-                type: (p.details?.propertyType || 'APARTMENT') as Listing['type'],
-                imageUrl: p.assets?.[0]?.url || `https://picsum.photos/seed/${p.id}/800/600`,
-                imageCount: p.assets?.length || 1,
+                type: 'APARTMENT',
+                imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
+                images: p.images || [],
+                imageCount: p.images?.length || 1,
                 provider: 'Host',
                 isVerified: true,
+                location: p.location || 'Unknown',
                 discount: 0,
                 rating: 5.0,
                 reviewCount: 0,
-                amenities: Array.isArray(p.details?.amenities) ? p.details.amenities : ['Wifi', 'Kitchen'],
+                amenities: ['Wifi', 'Kitchen'],
                 address: p.location,
                 description: p.description,
-                size: Number(p.details?.sizeSqm) || undefined,
-                maxGuests: Number(p.details?.maxGuests) || undefined,
-                assets: Array.isArray(p.assets) ? p.assets : [],
             }));
         }
 
-        setListings(dbListings);
+        // Fetch from Gemini
+        const data = await fetchListingsForCity(searchCity);
+        setListings([...dbListings, ...data]);
     } catch (e) {
         console.error("Failed to load listings", e);
     } finally {
@@ -121,7 +123,7 @@ export default function Home() {
         size: listing.size || Math.floor(Math.random() * 80) + 40,
         floor: Math.floor(Math.random() * 5) + 1,
         maxGuests: Math.floor(Math.random() * 3) + 1,
-        address: listing.address || `${listing.title}, ${city}`,
+        address: `${listing.title}, ${city}`,
         rooms: listing.rooms || [
             { id: 'r1', name: 'Master Bedroom', price: Math.floor(listing.price * 0.6), sqft: 20, isAvailable: true, features: ['King Bed', 'En-suite', 'Balcony'] },
             { id: 'r2', name: 'Standard Room', price: Math.floor(listing.price * 0.4), sqft: 14, isAvailable: false, features: ['Double Bed', 'Desk'] }

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Listing } from '../types';
-import { ChevronLeft, CalendarIcon, ChevronRight, PhoneIcon } from './Icons';
+import { ChevronLeft, CalendarIcon, ChevronRight, PhoneIcon, MessageCircleIcon } from './Icons';
 
 interface Reservation {
   id: string;
@@ -154,6 +154,10 @@ const ReservationsPage: React.FC<ReservationsPageProps> = ({ reservations, onBac
                                 </div>
                                 
                                 <div className="flex items-center gap-2 w-full sm:w-auto">
+                                     <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#E7F6EC] hover:bg-[#D3EFDC] text-[#0F5C2E] px-4 py-2 rounded-xl transition-colors text-xs font-bold border border-transparent hover:border-[#0F5C2E]/20">
+                                        <MessageCircleIcon className="w-4 h-4" />
+                                        <span>WhatsApp</span>
+                                     </button>
                                      <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-xl transition-colors text-xs font-bold border border-gray-200 hover:border-gray-300">
                                         <PhoneIcon className="w-4 h-4" />
                                         <span>Call</span>

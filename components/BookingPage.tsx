@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Listing } from '../types';
-import { ShieldCheck, StarIcon, HouseIcon } from './Icons';
+import { ShieldCheck, StarIcon, HouseIcon, MessageCircleIcon } from './Icons';
 
 interface BookingPageProps {
   listing: Listing;
@@ -104,16 +104,20 @@ const BookingPage: React.FC<BookingPageProps> = ({ listing, bookingDetails, onBa
                   </div>
               </div>
 
-              {/* Next Steps */}
+              {/* Next Steps / WhatsApp Section - Updated */}
               <div className="bg-[#E7F6EC] rounded-2xl p-5 border border-[#D1E8D9] mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-4">
                    <div className="text-center sm:text-left">
                        <h3 className="font-bold text-[#0F5C2E] text-base mb-1">What happens next?</h3>
                        <p className="text-sm text-[#0F5C2E]/90 font-medium">
-                          Our support team will contact you by phone or email to finalize your reservation.
+                          Our team will reach out to you soon.
+                       </p>
+                       <p className="text-sm text-[#0F5C2E] font-bold mt-1">
+                          More details will be shared through WhatsApp.
                        </p>
                    </div>
-                   <button className="flex-shrink-0 bg-[#0F5C2E] hover:bg-[#0b4925] text-white px-6 py-3 rounded-full font-bold text-sm shadow-sm transition-all active:scale-95">
-                       Contact Support
+                   <button className="flex-shrink-0 flex items-center gap-2 bg-[#25D366] hover:bg-[#20b85a] text-white px-6 py-3 rounded-full font-bold text-sm shadow-sm transition-all active:scale-95">
+                       <span>WhatsApp</span>
+                       <MessageCircleIcon className="w-5 h-5" />
                    </button>
               </div>
 

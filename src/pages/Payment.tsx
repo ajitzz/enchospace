@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { CreditCard, Lock, CheckCircle, ArrowLeft } from 'lucide-react';
-import { getAuthHeaders } from '../lib/auth';
 
 export default function Payment() {
   const location = useLocation();
@@ -44,11 +43,9 @@ export default function Payment() {
     
     try {
       // 1. Create booking in pending state
-      const authHeaders = await getAuthHeaders();
-
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           property_id: listing.id,
           user_name: bookingDetails.name,
@@ -65,7 +62,7 @@ export default function Payment() {
       // 2. Create Stripe checkout session
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           property_id: listing.id,
           title: listing.title,
@@ -156,7 +153,7 @@ export default function Payment() {
               <h3 className="text-xl font-bold mb-6">Order Summary</h3>
               
               <div className="flex gap-4 mb-6 pb-6 border-b border-gray-200">
-                <img src={(listing.assets?.[0]?.url || listing.imageUrl)} alt={listing.title} className="w-24 h-24 object-cover rounded-xl" />
+                <img src={listing.images[0]} alt={listing.title} className="w-24 h-24 object-cover rounded-xl" />
                 <div>
                   <h4 className="font-bold text-gray-900 line-clamp-2">{listing.title}</h4>
                   <p className="text-sm text-gray-500 mt-1">{listing.type} • {listing.size}m²</p>

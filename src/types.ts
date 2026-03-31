@@ -1,12 +1,4 @@
 
-export interface ListingAsset {
-  url: string;
-  key?: string;
-  type?: string;
-  name?: string;
-}
-
-
 export interface Room {
   id: string;
   name: string;
@@ -32,9 +24,11 @@ export interface Listing {
   period: string;
   type: 'APARTMENT' | 'ROOM' | 'STUDIO';
   imageUrl: string;
+  images?: string[];
   imageCount: number;
   provider: string;
   isVerified: boolean;
+  location?: string;
   discount?: number; // percentage
   isNew?: boolean;
   lat?: number; // For map simulation
@@ -42,7 +36,6 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  assets?: ListingAsset[];
   
   // Detailed fields
   description?: string;
