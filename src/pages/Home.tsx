@@ -13,7 +13,6 @@ import FlyToAnimation from '../components/FlyToAnimation';
 import { MapIcon, ListIcon } from '../components/Icons';
 import { fetchListingsForCity } from '../services/geminiService';
 import { Listing, Room, NearbyPoint } from '../types';
-import { fetchJson } from '../lib/api';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
 
@@ -66,9 +65,10 @@ export default function Home() {
     setSelectedListing(null);
     try {
         // Fetch from DB
+        const dbRes = await fetch('/api/properties');
         let dbListings = [];
-        try {
-            const dbData = await fetchJson<any[]>('/api/properties');
+        if (dbRes.ok) {
+            const dbData = await dbRes.json();
             dbListings = dbData.map((p: any) => ({
                 id: p.id.toString(),
                 title: p.title,
@@ -89,8 +89,6 @@ export default function Home() {
                 address: p.location,
                 description: p.description,
             }));
-        } catch (apiError) {
-            console.error('Failed to load hosted properties', apiError);
         }
 
         // Fetch from Gemini
