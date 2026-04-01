@@ -2,27 +2,91 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { CreditCard, Lock, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Listing } from '../types';
 
 export default function Payment() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { listing, bookingDetails } = location.state || {};
+  const { listing: stateListing, bookingDetails: stateBooking } = location.state || {};
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [listing, setListing] = useState<Listing | null>(stateListing || null);
+  const [bookingDetails, setBookingDetails] = useState<any>(stateBooking || null);
+  const [loadingRecovery, setLoadingRecovery] = useState(false);
 
   React.useEffect(() => {
-    // Check if we returned from Stripe checkout
     const query = new URLSearchParams(window.location.search);
+    const bookingId = query.get('booking_id');
+    const propertyId = query.get('property_id');
+
+    const recoverStateFromQuery = async () => {
+      if (stateListing && stateBooking) return;
+      if (!bookingId || !propertyId) return;
+
+      setLoadingRecovery(true);
+      try {
+        const [bookingRes, propertiesRes] = await Promise.all([
+          fetch(`/api/bookings/${bookingId}`),
+          fetch('/api/properties'),
+        ]);
+        if (!bookingRes.ok || !propertiesRes.ok) return;
+        const booking = await bookingRes.json();
+        const properties = await propertiesRes.json();
+        const property = properties.find((p: any) => String(p.id) === String(propertyId));
+        if (!property) return;
+
+        setListing({
+          id: String(property.id),
+          title: property.title,
+          price: Number(property.price),
+          currency: '$',
+          period: 'night',
+          type: 'APARTMENT',
+          imageUrl: property.images?.[0] || `https://picsum.photos/seed/${property.id}/800/600`,
+          images: property.images || [],
+          imageCount: property.images?.length || 1,
+          provider: 'Host',
+          isVerified: true,
+          location: property.location || 'Unknown',
+          discount: 0,
+          rating: 5,
+          reviewCount: 0,
+          amenities: ['Wifi', 'Kitchen'],
+          address: property.location,
+          description: property.description,
+        });
+        setBookingDetails({
+          name: booking.user_name,
+          phone: booking.user_phone,
+          moveInDate: booking.start_date,
+          configuration: 'Standard',
+          totalRent: Number(booking.total_price),
+        });
+      } finally {
+        setLoadingRecovery(false);
+      }
+    };
+
+    recoverStateFromQuery();
+
+    // Check if we returned from Stripe checkout
     if (query.get('success')) {
       setSuccess(true);
-      // In a real app, we would verify the session and create the booking here or via webhook
       setTimeout(() => navigate('/'), 3000);
     }
     if (query.get('canceled')) {
       alert('Payment was canceled.');
     }
-  }, [navigate]);
+  }, [navigate, stateBooking, stateListing]);
+
+  if (loadingRecovery) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center text-gray-600 font-medium">Loading booking details...</div>
+      </div>
+    );
+  }
 
   if (!listing || !bookingDetails) {
     return (
@@ -51,7 +115,7 @@ export default function Payment() {
           user_name: bookingDetails.name,
           user_phone: bookingDetails.phone,
           start_date: bookingDetails.moveInDate,
-          end_date: bookingDetails.moveOutDate,
+          end_date: bookingDetails.moveInDate,
           total_price: bookingDetails.totalRent,
         }),
       });
