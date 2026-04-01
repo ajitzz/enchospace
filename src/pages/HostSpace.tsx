@@ -90,13 +90,9 @@ export default function HostSpace() {
       if (res.ok) {
         setSuccess(true);
         setTimeout(() => navigate('/'), 2000);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        alert(body.error || 'Failed to publish property. Please check your input.');
       }
     } catch (error) {
       console.error('Failed to host space', error);
-      alert('Network error while publishing. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

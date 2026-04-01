@@ -8,6 +8,7 @@ export default function Admin() {
   const navigate = useNavigate();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
   const deleteProperty = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this property?')) return;
@@ -25,51 +26,12 @@ export default function Admin() {
     }
   };
 
-  const editProperty = async (prop: any) => {
-    const title = window.prompt('Edit title', prop.title);
-    if (!title) return;
-
-    const location = window.prompt('Edit location', prop.location);
-    if (!location) return;
-
-    const priceInput = window.prompt('Edit nightly price', String(prop.price));
-    if (!priceInput) return;
-
-    const price = Number(priceInput);
-    if (!Number.isFinite(price) || price <= 0) {
-      alert('Please enter a valid positive price.');
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/properties/${prop.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...prop,
-          title,
-          location,
-          price,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Failed to update property');
-      }
-
-      const updated = await res.json();
-      setProperties(prev => prev.map((p: any) => (p.id === updated.id ? updated : p)));
-      alert('Property updated successfully.');
-    } catch (err: any) {
-      alert(err.message || 'Error updating property');
-    }
-  };
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate('/');
+      } else {
+        setUser(session.user);
       }
     });
 
@@ -131,10 +93,7 @@ export default function Admin() {
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-2xl font-extrabold tracking-tight">Manage Properties</h1>
-              <button
-                onClick={() => navigate('/host')}
-                className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-full font-bold hover:bg-gray-800 transition-all active:scale-95 text-sm"
-              >
+              <button className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-full font-bold hover:bg-gray-800 transition-all active:scale-95 text-sm">
                 <Plus className="w-4 h-4" /> Add Property
               </button>
             </div>
@@ -172,10 +131,7 @@ export default function Admin() {
                         </td>
                         <td className="py-4 px-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => editProperty(prop)}
-                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            >
+                            <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                               <Edit className="w-4 h-4" />
                             </button>
                             <button 

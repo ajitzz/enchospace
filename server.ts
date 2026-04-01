@@ -9,26 +9,15 @@ dotenv.config();
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required. Refusing to start with insecure fallback credentials.");
-}
-
+// Use the provided Neon DB connection string
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_4cbpQjKtym9n@ep-small-smoke-a1vjxk25-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
 });
 
 const app = express();
 const PORT = 3000;
 
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
-  .split(",")
-  .map(origin => origin.trim())
-  .filter(Boolean);
-
-app.use(cors({
-  origin: allowedOrigins.length > 0 ? allowedOrigins : false,
-  credentials: true,
-}));
+app.use(cors());
 
 // Stripe Webhook MUST be before express.json()
 app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
@@ -67,38 +56,6 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json());
-
-function isValidIsoDate(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function validatePropertyPayload(body: any) {
-  const errors: string[] = [];
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  const description = typeof body?.description === "string" ? body.description.trim() : "";
-  const location = typeof body?.location === "string" ? body.location.trim() : "";
-  const price = Number(body?.price);
-  const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === "string") : [];
-
-  if (!title || title.length < 3) errors.push("title must be at least 3 characters");
-  if (!location || location.length < 2) errors.push("location is required");
-  if (!Number.isFinite(price) || price <= 0) errors.push("price must be a positive number");
-  if (description.length > 5000) errors.push("description too long");
-  if (images.length > 30) errors.push("max 30 files allowed");
-
-  return {
-    errors,
-    data: {
-      title,
-      description,
-      location,
-      price,
-      images,
-      owner_id: typeof body?.owner_id === "string" && body.owner_id.trim() ? body.owner_id.trim() : "anonymous",
-      status: typeof body?.status === "string" ? body.status : "available",
-    }
-  };
-}
 
 // Initialize DB tables
 async function initDB() {
@@ -162,11 +119,8 @@ app.get("/api/cron/keepalive", async (req, res) => {
 app.post("/api/upload-url", async (req, res) => {
   try {
     const { fileName, fileType } = req.body;
-    if (!fileName || !fileType || typeof fileName !== "string" || typeof fileType !== "string") {
+    if (!fileName || !fileType) {
       return res.status(400).json({ error: "fileName and fileType are required" });
-    }
-    if (fileName.length > 255) {
-      return res.status(400).json({ error: "fileName too long" });
     }
 
     const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
@@ -236,12 +190,7 @@ app.get("/api/properties", async (req, res) => {
 });
 
 app.post("/api/properties", async (req, res) => {
-  const { errors, data } = validatePropertyPayload(req.body);
-  if (errors.length > 0) {
-    return res.status(400).json({ error: "Invalid property payload", details: errors });
-  }
-
-  const { title, description, price, location, images, owner_id } = data;
+  const { title, description, price, location, images, owner_id } = req.body;
   try {
     const result = await pool.query(
       "INSERT INTO properties (title, description, price, location, images, owner_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
@@ -262,49 +211,11 @@ app.post("/api/properties", async (req, res) => {
   }
 });
 
-app.put("/api/properties/:id", async (req, res) => {
-  const { id } = req.params;
-  const propertyId = Number(id);
-  if (!Number.isInteger(propertyId) || propertyId <= 0) {
-    return res.status(400).json({ error: "Invalid property id" });
-  }
-
-  const { errors, data } = validatePropertyPayload(req.body);
-  if (errors.length > 0) {
-    return res.status(400).json({ error: "Invalid property payload", details: errors });
-  }
-
-  try {
-    const result = await pool.query(
-      "UPDATE properties SET title = $1, description = $2, price = $3, location = $4, images = $5, status = $6 WHERE id = $7 RETURNING *",
-      [data.title, data.description, data.price, data.location, JSON.stringify(data.images), data.status, propertyId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Property not found" });
-    }
-
-    if (process.env.UPSTASH_REDIS_URL) {
-      const { Redis } = await import("ioredis");
-      const redis = new Redis(process.env.UPSTASH_REDIS_URL);
-      await redis.del("properties:all").catch(e => console.warn("Redis del error:", e));
-    }
-
-    res.json(result.rows[0]);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Failed to update property" });
-  }
-});
-
 app.delete("/api/properties/:id", async (req, res) => {
   const { id } = req.params;
-  const propertyId = Number(id);
-  if (!Number.isInteger(propertyId) || propertyId <= 0) {
-    return res.status(400).json({ error: "Invalid property id" });
-  }
   try {
-    await pool.query("DELETE FROM bookings WHERE property_id = $1", [propertyId]);
-    await pool.query("DELETE FROM properties WHERE id = $1", [propertyId]);
+    await pool.query("DELETE FROM bookings WHERE property_id = $1", [id]);
+    await pool.query("DELETE FROM properties WHERE id = $1", [id]);
     
     // Invalidate cache
     if (process.env.UPSTASH_REDIS_URL) {
@@ -324,14 +235,10 @@ app.delete("/api/properties/:id", async (req, res) => {
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const { property_id, title, total_price, user_name, booking_id } = req.body;
-    const parsedTotal = Number(total_price);
-    if (!property_id || typeof title !== "string" || !Number.isFinite(parsedTotal) || parsedTotal <= 0) {
-      return res.status(400).json({ error: "Invalid checkout payload" });
-    }
     
     if (!process.env.STRIPE_SECRET_KEY) {
       // Mock success if no Stripe key is provided
-      return res.json({ url: `/payment?success=true&property_id=${property_id}&booking_id=${booking_id || ""}` });
+      return res.json({ url: `/payment?success=true&property_id=${property_id}` });
     }
 
     const Stripe = (await import("stripe")).default;
@@ -347,13 +254,13 @@ app.post("/api/create-checkout-session", async (req, res) => {
               name: `Booking for ${title}`,
               description: `Reservation by ${user_name}`,
             },
-            unit_amount: Math.round(parsedTotal * 100), // Stripe expects cents
+            unit_amount: Math.round(total_price * 100), // Stripe expects cents
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url: `${req.headers.origin}/payment?success=true&property_id=${property_id}&booking_id=${booking_id || ""}`,
+      success_url: `${req.headers.origin}/payment?success=true&property_id=${property_id}`,
       cancel_url: `${req.headers.origin}/payment?canceled=true`,
       metadata: {
         booking_id: booking_id || null,
@@ -369,43 +276,15 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
 app.post("/api/bookings", async (req, res) => {
   const { property_id, user_name, user_phone, start_date, end_date, total_price } = req.body;
-  if (!property_id || typeof user_name !== "string" || typeof user_phone !== "string") {
-    return res.status(400).json({ error: "Invalid booking payload" });
-  }
-  if (!isValidIsoDate(start_date) || !isValidIsoDate(end_date)) {
-    return res.status(400).json({ error: "Dates must use YYYY-MM-DD format" });
-  }
-  const parsedTotal = Number(total_price);
-  if (!Number.isFinite(parsedTotal) || parsedTotal <= 0) {
-    return res.status(400).json({ error: "total_price must be a positive number" });
-  }
-
   try {
     const result = await pool.query(
       "INSERT INTO bookings (property_id, user_name, user_phone, start_date, end_date, total_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [property_id, user_name.trim(), user_phone.trim(), start_date, end_date, parsedTotal]
+      [property_id, user_name, user_phone, start_date, end_date, total_price]
     );
     res.json(result.rows[0]);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to create booking" });
-  }
-});
-
-app.get("/api/bookings/:id", async (req, res) => {
-  const bookingId = Number(req.params.id);
-  if (!Number.isInteger(bookingId) || bookingId <= 0) {
-    return res.status(400).json({ error: "Invalid booking id" });
-  }
-  try {
-    const result = await pool.query("SELECT * FROM bookings WHERE id = $1", [bookingId]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Booking not found" });
-    }
-    res.json(result.rows[0]);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Failed to fetch booking" });
   }
 });
 
