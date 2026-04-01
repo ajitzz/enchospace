@@ -75,7 +75,7 @@ export default function Home() {
                 price: p.price,
                 currency: '$',
                 period: 'night',
-                type: 'APARTMENT',
+                type: p.details?.propertyType?.toUpperCase() || 'APARTMENT',
                 imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
                 images: p.images || [],
                 imageCount: p.images?.length || 1,
@@ -85,9 +85,10 @@ export default function Home() {
                 discount: 0,
                 rating: 5.0,
                 reviewCount: 0,
-                amenities: ['Wifi', 'Kitchen'],
+                amenities: p.details?.amenities || ['Wifi', 'Kitchen'],
                 address: p.location,
                 description: p.description,
+                details: p.details || {},
             }));
         }
 
