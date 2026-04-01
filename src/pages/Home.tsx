@@ -35,21 +35,6 @@ interface FlyAnimationState {
     target: 'RESERVES' | 'WISHLIST';
 }
 
-const ensureJsonResponse = async <T,>(response: Response): Promise<T> => {
-  const contentType = response.headers.get('content-type') || '';
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  if (!contentType.includes('application/json')) {
-    const body = await response.text();
-    throw new Error(`Expected JSON response but received ${contentType || 'unknown content type'}: ${body.slice(0, 120)}`);
-  }
-
-  return response.json() as Promise<T>;
-};
-
 export default function Home() {
   const navigate = useNavigate();
   const [city, setCity] = useState('Berlin');
@@ -79,43 +64,38 @@ export default function Home() {
     setCurrentView('SEARCH');
     setSelectedListing(null);
     try {
-        const dbListings: Listing[] = [];
-
-        try {
-            const dbRes = await fetch('/api/properties');
-            const dbData = await ensureJsonResponse<any[]>(dbRes);
-
-            dbListings.push(
-                ...dbData.map((p) => ({
-                    id: p.id.toString(),
-                    title: p.title,
-                    price: p.price,
-                    currency: '$',
-                    period: 'night',
-                    type: 'APARTMENT' as const,
-                    imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
-                    images: p.images || [],
-                    imageCount: p.images?.length || 1,
-                    provider: 'Host',
-                    isVerified: true,
-                    location: p.location || 'Unknown',
-                    discount: 0,
-                    rating: 5.0,
-                    reviewCount: 0,
-                    amenities: ['Wifi', 'Kitchen'],
-                    address: p.location,
-                    description: p.description,
-                }))
-            );
-        } catch (dbError) {
-            console.warn('Failed to load DB listings; continuing with generated listings.', dbError);
+        // Fetch from DB
+        const dbRes = await fetch('/api/properties');
+        let dbListings = [];
+        if (dbRes.ok) {
+            const dbData = await dbRes.json();
+            dbListings = dbData.map((p: any) => ({
+                id: p.id.toString(),
+                title: p.title,
+                price: p.price,
+                currency: '$',
+                period: 'night',
+                type: 'APARTMENT',
+                imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
+                images: p.images || [],
+                imageCount: p.images?.length || 1,
+                provider: 'Host',
+                isVerified: true,
+                location: p.location || 'Unknown',
+                discount: 0,
+                rating: 5.0,
+                reviewCount: 0,
+                amenities: ['Wifi', 'Kitchen'],
+                address: p.location,
+                description: p.description,
+            }));
         }
 
-        const generatedListings = await fetchListingsForCity(searchCity);
-        setListings([...dbListings, ...generatedListings]);
+        // Fetch from Gemini
+        const data = await fetchListingsForCity(searchCity);
+        setListings([...dbListings, ...data]);
     } catch (e) {
-        console.error('Failed to load listings', e);
-        setListings([]);
+        console.error("Failed to load listings", e);
     } finally {
         setLoading(false);
     }
