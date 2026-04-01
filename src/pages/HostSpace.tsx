@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { Home, Upload, DollarSign, MapPin, CheckCircle, ChevronRight, ChevronLeft, Wifi, Coffee, Tv, Car, Wind, Shield } from 'lucide-react';
+import { Upload, DollarSign, MapPin, CheckCircle, ChevronRight, ChevronLeft, Wifi, Coffee, Tv, Car, Wind, Shield, FileText, Video, Music, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -13,6 +13,8 @@ const AMENITIES_LIST = [
   { id: 'ac', label: 'Air Conditioning', icon: Wind },
   { id: 'security', label: '24/7 Security', icon: Shield },
 ];
+
+const PROPERTY_TYPES = ['Apartment', 'House', 'Villa', 'Cabin', 'Unique Space', 'Studio Loft'];
 
 export default function HostSpace() {
   const navigate = useNavigate();
@@ -46,6 +48,22 @@ export default function HostSpace() {
   const [success, setSuccess] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  const mediaSummary = useMemo(() => {
+    let imageCount = 0;
+    let videoCount = 0;
+    let audioCount = 0;
+    let docsCount = 0;
+
+    formData.images.forEach((url) => {
+      if (url.match(/\.(jpeg|jpg|gif|png|svg|webp)$/i) || url.includes('image')) imageCount += 1;
+      else if (url.match(/\.(mp4|webm|ogg|mov)$/i) || url.includes('video')) videoCount += 1;
+      else if (url.match(/\.(mp3|wav|aac)$/i) || url.includes('audio')) audioCount += 1;
+      else docsCount += 1;
+    });
+
+    return { imageCount, videoCount, audioCount, docsCount };
+  }, [formData.images]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -58,7 +76,7 @@ export default function HostSpace() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, fileType: file.type }),
         });
-        
+
         if (!res.ok) throw new Error('Failed to get upload URL');
         const { uploadUrl, fileUrl } = await res.json();
 
@@ -72,7 +90,7 @@ export default function HostSpace() {
       });
 
       const uploadedUrls = await Promise.all(uploadPromises);
-      setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
+      setFormData((prev) => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Failed to upload some files. Please try again.');
@@ -82,18 +100,18 @@ export default function HostSpace() {
   };
 
   const removeFile = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index)
+      images: prev.images.filter((_, i) => i !== index),
     }));
   };
 
   const toggleAmenity = (id: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      amenities: prev.amenities.includes(id) 
-        ? prev.amenities.filter(a => a !== id)
-        : [...prev.amenities, id]
+      amenities: prev.amenities.includes(id)
+        ? prev.amenities.filter((a) => a !== id)
+        : [...prev.amenities, id],
     }));
   };
 
@@ -115,13 +133,14 @@ export default function HostSpace() {
             bathrooms: formData.bathrooms,
             maxGuests: formData.maxGuests,
             amenities: formData.amenities,
+            mediaSummary,
           },
           owner_id: user?.id || 'anonymous',
         }),
       });
       if (res.ok) {
         setSuccess(true);
-        setTimeout(() => navigate('/'), 2000);
+        setTimeout(() => navigate('/admin'), 1800);
       }
     } catch (error) {
       console.error('Failed to host space', error);
@@ -130,209 +149,22 @@ export default function HostSpace() {
     }
   };
 
-  const nextStep = () => setStep(s => Math.min(s + 1, 5));
-  const prevStep = () => setStep(s => Math.max(s - 1, 1));
-
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6">Let's start with the basics</h2>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Property Title</label>
-              <input 
-                type="text" 
-                value={formData.title}
-                onChange={e => setFormData({...formData, title: e.target.value})}
-                className="w-full px-4 py-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-lg"
-                placeholder="e.g. Modern Loft in City Center"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Property Type</label>
-              <select 
-                value={formData.propertyType}
-                onChange={e => setFormData({...formData, propertyType: e.target.value})}
-                className="w-full px-4 py-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-lg bg-white"
-              >
-                <option>Apartment</option>
-                <option>House</option>
-                <option>Villa</option>
-                <option>Cabin</option>
-                <option>Unique Space</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Location</label>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input 
-                  type="text" 
-                  value={formData.location}
-                  onChange={e => setFormData({...formData, location: e.target.value})}
-                  className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-lg"
-                  placeholder="e.g. Berlin, Germany"
-                />
-              </div>
-            </div>
-          </motion.div>
-        );
-      case 2:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6">Tell us more about your place</h2>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Description</label>
-              <textarea 
-                value={formData.description}
-                onChange={e => setFormData({...formData, description: e.target.value})}
-                className="w-full px-4 py-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all min-h-[150px] text-lg"
-                placeholder="Describe the unique features of your space..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Price per Night ($)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input 
-                  type="number" 
-                  min="1"
-                  value={formData.price}
-                  onChange={e => setFormData({...formData, price: e.target.value})}
-                  className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-lg"
-                  placeholder="150"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Bedrooms</label>
-                <input type="number" min="1" value={formData.bedrooms} onChange={e => setFormData({...formData, bedrooms: parseInt(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Bathrooms</label>
-                <input type="number" min="1" value={formData.bathrooms} onChange={e => setFormData({...formData, bathrooms: parseInt(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Max Guests</label>
-                <input type="number" min="1" value={formData.maxGuests} onChange={e => setFormData({...formData, maxGuests: parseInt(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-black outline-none" />
-              </div>
-            </div>
-          </motion.div>
-        );
-      case 3:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6">What amenities do you offer?</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {AMENITIES_LIST.map((amenity) => {
-                const isSelected = formData.amenities.includes(amenity.id);
-                const Icon = amenity.icon;
-                return (
-                  <button
-                    key={amenity.id}
-                    onClick={() => toggleAmenity(amenity.id)}
-                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${isSelected ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-200'}`}
-                  >
-                    <Icon className={`w-6 h-6 ${isSelected ? 'text-black' : 'text-gray-400'}`} />
-                    <span className={`font-medium ${isSelected ? 'text-black' : 'text-gray-600'}`}>{amenity.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        );
-      case 4:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6">Add some photos of your space</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-3xl p-12 text-center hover:bg-gray-50 transition-colors cursor-pointer relative">
-              <input 
-                type="file" 
-                multiple
-                accept="image/*,video/*,audio/*,.pdf,.doc,.docx" 
-                onChange={handleFileUpload}
-                disabled={uploadingImage}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              />
-              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-lg text-gray-800 font-medium mb-2">
-                {uploadingImage ? 'Uploading files...' : 'Drag your photos here'}
-              </p>
-              <p className="text-sm text-gray-500">Choose at least 5 photos. High quality images work best.</p>
-            </div>
-            {formData.images.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6">
-                {formData.images.map((url, i) => {
-                  const isImage = url.match(/\.(jpeg|jpg|gif|png|svg)$/i) != null || url.includes('image');
-                  const isVideo = url.match(/\.(mp4|webm|ogg)$/i) != null || url.includes('video');
-                  return (
-                    <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-                      {isImage ? (
-                        <img src={url} alt={`Upload ${i}`} className="w-full h-full object-cover" />
-                      ) : isVideo ? (
-                        <video src={url} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center text-xs text-gray-500 p-4 text-center">
-                          <span className="truncate">{url.split('/').pop()}</span>
-                        </div>
-                      )}
-                      <button 
-                        type="button"
-                        onClick={() => removeFile(i)}
-                        className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-red-500 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </motion.div>
-        );
-      case 5:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <h2 className="text-2xl font-bold mb-6">Review your listing</h2>
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-              <div className="aspect-video rounded-2xl overflow-hidden mb-6 bg-gray-100">
-                {formData.images[0] ? (
-                  <img src={formData.images[0]} alt="Cover" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">No cover image</div>
-                )}
-              </div>
-              <h3 className="text-xl font-bold mb-2">{formData.title || 'Untitled Space'}</h3>
-              <p className="text-gray-500 mb-4">{formData.location || 'No location specified'}</p>
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-6">
-                <span>{formData.maxGuests} guests</span>
-                <span>·</span>
-                <span>{formData.bedrooms} bedrooms</span>
-                <span>·</span>
-                <span>{formData.bathrooms} baths</span>
-              </div>
-              <div className="text-2xl font-bold">${formData.price || '0'} <span className="text-base font-normal text-gray-500">night</span></div>
-            </div>
-          </motion.div>
-        );
-    }
-  };
+  const nextStep = () => setStep((s) => Math.min(s + 1, 5));
+  const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
   const isStepValid = () => {
     if (step === 1) return formData.title.trim() !== '' && formData.location.trim() !== '';
     if (step === 2) return formData.description.trim() !== '' && formData.price !== '' && parseFloat(formData.price) > 0;
-    if (step === 3) return true; // Amenities are optional
-    if (step === 4) return formData.images.length > 0;
+    if (step === 3) return true;
+    if (step === 4) return formData.images.length >= 3;
     return true;
   };
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <Header 
-        onSearch={() => {}} 
-        currentCity="Berlin" 
+      <Header
+        onSearch={() => {}}
+        currentCity="Berlin"
         onWishlistClick={() => {}}
         onReservesClick={() => {}}
         highlightReserves={false}
@@ -340,60 +172,99 @@ export default function HostSpace() {
         reservesCount={0}
         wishlistCount={0}
       />
-      
-      <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 pt-8 pb-32">
+
+      <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-4 pt-8 pb-32">
         {success ? (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="m-auto text-center py-12">
+          <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} className="m-auto text-center py-12">
             <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
             <h2 className="text-3xl font-bold mb-4">Space Hosted Successfully!</h2>
-            <p className="text-gray-600 text-lg">Your property is now live and ready for bookings.</p>
+            <p className="text-gray-600 text-lg">Your listing is ready. Redirecting you to Admin panel...</p>
           </motion.div>
         ) : (
           <>
-            {/* Progress Bar */}
+            <div className="mb-8 rounded-3xl border border-gray-100 bg-gradient-to-r from-gray-900 to-gray-700 text-white p-5 md:p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <Sparkles className="w-5 h-5 text-yellow-300" />
+                <p className="font-semibold">Production-ready host workflow</p>
+              </div>
+              <p className="text-sm md:text-base text-gray-100/90">Add high-quality media (images/video/audio/docs), clear property details, and publish directly to your platform.</p>
+            </div>
+
             <div className="w-full h-2 bg-gray-100 rounded-full mb-12 overflow-hidden">
-              <motion.div 
-                className="h-full bg-black"
-                initial={{ width: '20%' }}
-                animate={{ width: `${(step / 5) * 100}%` }}
-                transition={{ duration: 0.3 }}
-              />
+              <motion.div className="h-full bg-black" initial={{ width: '20%' }} animate={{ width: `${(step / 5) * 100}%` }} transition={{ duration: 0.3 }} />
             </div>
 
             <div className="flex-1">
               <AnimatePresence mode="wait">
-                {renderStep()}
+                {step === 1 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <h2 className="text-2xl font-bold mb-2">Let&apos;s start with the basics</h2>
+                    <input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full px-4 py-4 rounded-xl border border-gray-200" placeholder="Property title" />
+                    <select value={formData.propertyType} onChange={(e) => setFormData({ ...formData, propertyType: e.target.value })} className="w-full px-4 py-4 rounded-xl border border-gray-200 bg-white">
+                      {PROPERTY_TYPES.map((type) => <option key={type}>{type}</option>)}
+                    </select>
+                    <div className="relative"><MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200" placeholder="Location" /></div>
+                  </motion.div>
+                )}
+                {step === 2 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <h2 className="text-2xl font-bold mb-2">Tell guests what makes this stay special</h2>
+                    <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-4 py-4 rounded-xl border border-gray-200 min-h-[150px]" />
+                    <div className="relative"><DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="number" min="1" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200" placeholder="Price per night" /></div>
+                  </motion.div>
+                )}
+                {step === 3 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <h2 className="text-2xl font-bold">Configure capacity & amenities</h2>
+                    <div className="grid grid-cols-3 gap-4">
+                      <input type="number" min="1" value={formData.bedrooms} onChange={(e) => setFormData({ ...formData, bedrooms: parseInt(e.target.value || '1', 10) })} className="px-4 py-3 rounded-xl border border-gray-200" />
+                      <input type="number" min="1" value={formData.bathrooms} onChange={(e) => setFormData({ ...formData, bathrooms: parseInt(e.target.value || '1', 10) })} className="px-4 py-3 rounded-xl border border-gray-200" />
+                      <input type="number" min="1" value={formData.maxGuests} onChange={(e) => setFormData({ ...formData, maxGuests: parseInt(e.target.value || '1', 10) })} className="px-4 py-3 rounded-xl border border-gray-200" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">{AMENITIES_LIST.map((amenity) => { const Icon = amenity.icon; const selected = formData.amenities.includes(amenity.id); return <button key={amenity.id} onClick={() => toggleAmenity(amenity.id)} className={`flex items-center gap-3 p-4 rounded-2xl border-2 ${selected ? 'border-black bg-gray-50' : 'border-gray-100'}`}><Icon className="w-5 h-5" />{amenity.label}</button>; })}</div>
+                  </motion.div>
+                )}
+                {step === 4 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <h2 className="text-2xl font-bold">Upload media & property files</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="rounded-xl bg-gray-50 p-3"><FileText className="w-4 h-4 mb-1" /> Docs: {mediaSummary.docsCount}</div>
+                      <div className="rounded-xl bg-gray-50 p-3"><Video className="w-4 h-4 mb-1" /> Videos: {mediaSummary.videoCount}</div>
+                      <div className="rounded-xl bg-gray-50 p-3"><Music className="w-4 h-4 mb-1" /> Audio: {mediaSummary.audioCount}</div>
+                      <div className="rounded-xl bg-gray-50 p-3"><Upload className="w-4 h-4 mb-1" /> Images: {mediaSummary.imageCount}</div>
+                    </div>
+                    <div className="border-2 border-dashed border-gray-300 rounded-3xl p-10 text-center relative">
+                      <input type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx" onChange={handleFileUpload} disabled={uploadingImage} className="absolute inset-0 w-full h-full opacity-0" />
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-lg font-medium">{uploadingImage ? 'Uploading files...' : 'Drop files or click to upload'}</p>
+                      <p className="text-sm text-gray-500">At least 3 media files required. Supports image, video, audio, PDF, DOCX.</p>
+                    </div>
+                    {formData.images.length > 0 && <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">{formData.images.map((url, i) => <div key={url + i} className="relative group aspect-square rounded-2xl border border-gray-100 overflow-hidden"><img src={url} alt={`upload ${i}`} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} /><button onClick={() => removeFile(i)} className="absolute top-2 right-2 rounded-full bg-white px-2 py-1 text-xs">Remove</button></div>)}</div>}
+                  </motion.div>
+                )}
+                {step === 5 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <h2 className="text-2xl font-bold">Review & publish</h2>
+                    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-3">
+                      <h3 className="text-xl font-bold">{formData.title || 'Untitled Space'}</h3>
+                      <p className="text-gray-500">{formData.location || 'No location'}</p>
+                      <p className="text-gray-700">{formData.description || 'No description'}</p>
+                      <p className="font-semibold">${formData.price || '0'} / night</p>
+                    </div>
+                  </motion.div>
+                )}
               </AnimatePresence>
             </div>
 
-            {/* Fixed Bottom Navigation */}
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 z-10">
-              <div className="max-w-3xl mx-auto flex items-center justify-between">
-                <button 
-                  onClick={prevStep}
-                  className={`px-6 py-3 font-semibold rounded-xl transition-colors ${step === 1 ? 'invisible' : 'text-black hover:bg-gray-100'}`}
-                >
-                  Back
-                </button>
-                
+              <div className="max-w-4xl mx-auto flex items-center justify-between">
+                <button onClick={prevStep} className={`px-6 py-3 font-semibold rounded-xl ${step === 1 ? 'invisible' : 'text-black hover:bg-gray-100'}`}><ChevronLeft className="w-4 h-4 inline mr-1" />Back</button>
                 {step < 5 ? (
-                  <button 
-                    onClick={nextStep}
-                    disabled={!isStepValid()}
-                    className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next <ChevronRight className="w-5 h-5" />
-                  </button>
+                  <button onClick={nextStep} disabled={!isStepValid()} className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-xl font-semibold disabled:opacity-50">Next <ChevronRight className="w-5 h-5" /></button>
                 ) : (
-                  <button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !isStepValid()}
-                    className="flex items-center gap-2 bg-[#E31C5F] text-white px-8 py-3 rounded-xl font-semibold hover:bg-[#c2144e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? 'Publishing...' : 'Publish Space'}
-                  </button>
+                  <button onClick={handleSubmit} disabled={isSubmitting || !isStepValid()} className="flex items-center gap-2 bg-[#E31C5F] text-white px-8 py-3 rounded-xl font-semibold disabled:opacity-50">{isSubmitting ? 'Publishing...' : 'Publish Space'}</button>
                 )}
               </div>
             </div>

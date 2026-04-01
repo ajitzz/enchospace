@@ -334,7 +334,7 @@ const Header: React.FC<HeaderProps> = ({
                         <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Contact Us</div>
                         <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer">
                             <MessageCircleIcon className="w-5 h-5 text-green-600" />
-                            <span className="text-sm font-medium text-gray-700">WhatsApp</span>
+                            <span className="text-sm font-medium text-gray-700">Live Chat</span>
                         </div>
                         <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer">
                             <PhoneIcon className="w-5 h-5 text-gray-600" />
@@ -454,10 +454,10 @@ const Header: React.FC<HeaderProps> = ({
                       <div className="mt-auto pt-6 border-t border-gray-100">
                           <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Contact & Support</h4>
                           <div className="space-y-3">
-                              <button className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition-colors">
+                              <button className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
                                   <MessageCircleIcon className="w-5 h-5" />
                                   <div className="flex flex-col items-start">
-                                      <span className="text-xs font-semibold opacity-70">WhatsApp</span>
+                                      <span className="text-xs font-semibold opacity-70">Live Chat</span>
                                       <span className="font-bold">+1 234 567 890</span>
                                   </div>
                               </button>
