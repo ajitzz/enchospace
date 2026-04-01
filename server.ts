@@ -104,9 +104,14 @@ async function initDB() {
   }
 }
 
-initDB();
-
 // API Routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[API] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok",
@@ -365,7 +370,16 @@ async function sendWhatsAppMessage(to: string, message: string) {
     return;
   }
 
+  // Format phone number: remove any non-digit characters and leading +
+  const formattedTo = to.replace(/\D/g, '');
+
+  if (formattedTo.length < 10) {
+    console.warn(`Invalid phone number format: ${to}. Aborting WhatsApp send.`);
+    return;
+  }
+
   try {
+    console.log(`Sending WhatsApp message to ${formattedTo}...`);
     const response = await fetch(`https://graph.facebook.com/v17.0/${phone_number_id}/messages`, {
       method: "POST",
       headers: {
@@ -374,7 +388,7 @@ async function sendWhatsAppMessage(to: string, message: string) {
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to: to,
+        to: formattedTo,
         type: "text",
         text: { body: message },
       }),
@@ -382,9 +396,9 @@ async function sendWhatsAppMessage(to: string, message: string) {
 
     const data = await response.json();
     if (!response.ok) {
-      console.error("Failed to send WhatsApp message:", data);
+      console.error("Failed to send WhatsApp message:", JSON.stringify(data, null, 2));
     } else {
-      console.log("WhatsApp message sent successfully:", data);
+      console.log("WhatsApp message sent successfully:", data.messages?.[0]?.id || "Success");
     }
   } catch (error) {
     console.error("Error sending WhatsApp message:", error);
@@ -484,27 +498,43 @@ app.post("/api/bookings", async (req, res) => {
 // Vite middleware for development
 async function setupVite() {
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware initialized.");
+    } catch (e) {
+      console.error("Failed to initialize Vite middleware:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+    console.log("Static file serving initialized from /dist.");
   }
 }
 
-setupVite();
+// Start Server
+async function startServer() {
+  await initDB();
+  
+  // API 404 Handler - MUST be after all API routes but BEFORE setupVite
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
+  });
 
-if (process.env.NODE_ENV !== "production") {
+  await setupVite();
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 }
+
+startServer();
 
 export default app;

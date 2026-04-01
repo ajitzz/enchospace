@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import { fetchApi } from '../lib/api';
 import { CreditCard, Lock, CheckCircle, ArrowLeft } from 'lucide-react';
 
 export default function Payment() {
@@ -43,9 +44,8 @@ export default function Payment() {
     
     try {
       // 1. Create booking in pending state
-      const bookingRes = await fetch('/api/bookings', {
+      const booking = await fetchApi('/api/bookings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           property_id: listing.id,
           user_name: bookingDetails.name,
@@ -55,14 +55,10 @@ export default function Payment() {
           total_price: bookingDetails.totalRent,
         }),
       });
-      
-      if (!bookingRes.ok) throw new Error('Failed to create booking');
-      const booking = await bookingRes.json();
 
       // 2. Create Stripe checkout session
-      const res = await fetch('/api/create-checkout-session', {
+      const { url } = await fetchApi('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           property_id: listing.id,
           title: listing.title,
@@ -72,15 +68,12 @@ export default function Payment() {
         }),
       });
       
-      if (!res.ok) throw new Error('Failed to create checkout session');
-      
-      const { url } = await res.json();
       if (url) {
         window.location.href = url;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Payment failed', err);
-      alert('Failed to initiate payment. Please try again.');
+      alert(err.message || 'Failed to initiate payment. Please try again.');
     } finally {
       setIsProcessing(false);
     }

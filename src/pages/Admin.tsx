@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { Shield, Trash2, Edit, Plus, Users, Home, CreditCard, TrendingUp, Calendar, MapPin, DollarSign, Activity } from 'lucide-react';
+import { Shield, Trash2, Edit, Plus, Users, Home, CreditCard, TrendingUp, Calendar, MapPin, DollarSign, Activity, Search as SearchIcon, MessageCircle as MessageCircleIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchApi } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -14,36 +15,52 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [propsData, statsData, bookingsData, usersData] = await Promise.all([
+        fetchApi('/api/properties'),
+        fetchApi('/api/admin/stats'),
+        fetchApi('/api/admin/bookings'),
+        fetchApi('/api/admin/users')
+      ]);
+      setProperties(propsData || []);
+      setStats(statsData || { totalProperties: 0, totalBookings: 0, totalRevenue: 0 });
+      setBookings(bookingsData || []);
+      setUsers(usersData || []);
+    } catch (err: any) {
+      console.error('Admin data fetch failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const deleteProperty = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this property?')) return;
     
     try {
-      const res = await fetch(`/api/properties/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setProperties(prev => prev.filter((p: any) => p.id !== id));
-        setStats(prev => ({ ...prev, totalProperties: Math.max(0, prev.totalProperties - 1) }));
-      } else {
-        alert('Failed to delete property');
-      }
-    } catch (err) {
+      await fetchApi(`/api/properties/${id}`, { method: 'DELETE' });
+      setProperties(prev => prev.filter((p: any) => p.id !== id));
+      setStats(prev => ({ ...prev, totalProperties: Math.max(0, prev.totalProperties - 1) }));
+    } catch (err: any) {
       console.error(err);
-      alert('Error deleting property');
+      alert(err.message || 'Error deleting property');
     }
   };
 
   const updateBookingStatus = async (id: number, status: string) => {
     try {
-      const res = await fetch(`/api/admin/bookings/${id}`, {
+      await fetchApi(`/api/admin/bookings/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-      if (res.ok) {
-        setBookings(prev => prev.map((b: any) => b.id === id ? { ...b, status } : b));
-      }
-    } catch (err) {
+      setBookings(prev => prev.map((b: any) => b.id === id ? { ...b, status } : b));
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || 'Error updating booking');
     }
   };
 
@@ -56,28 +73,25 @@ export default function Admin() {
       }
     });
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [propsData, statsData, bookingsData, usersData] = await Promise.all([
-          fetch('/api/properties').then(res => res.json()),
-          fetch('/api/admin/stats').then(res => res.json()),
-          fetch('/api/admin/bookings').then(res => res.json()),
-          fetch('/api/admin/users').then(res => res.json())
-        ]);
-        setProperties(propsData);
-        setStats(statsData);
-        setBookings(bookingsData);
-        setUsers(usersData);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [navigate]);
+
+  const filteredBookings = bookings.filter((b: any) => {
+    const matchesStatus = filterStatus === 'all' || b.status === filterStatus;
+    const matchesSearch = b.user_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         b.property_title.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const filteredUsers = users.filter((u: any) => 
+    u.user_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    u.user_phone.includes(searchTerm)
+  );
+
+  const filteredProperties = properties.filter((p: any) => 
+    p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.location.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const StatCard = ({ title, value, icon: Icon, trend }: any) => (
     <motion.div 
@@ -158,7 +172,7 @@ export default function Admin() {
 
         {/* Admin Content */}
         <main className="flex-1 pb-24">
-          <div className="mb-8 flex justify-between items-end">
+          <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight mb-2">
                 {activeTab === 'dashboard' && 'Overview'}
@@ -168,11 +182,21 @@ export default function Admin() {
               </h1>
               <p className="text-gray-500">Welcome back, here's what's happening today.</p>
             </div>
-            {activeTab === 'properties' && (
-              <button onClick={() => navigate('/host')} className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-full font-bold hover:bg-gray-800 transition-all active:scale-95 shadow-md">
-                <Plus className="w-5 h-5" /> Add Property
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={fetchData}
+                disabled={loading}
+                className="p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                title="Refresh Data"
+              >
+                <Activity className={`w-5 h-5 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
               </button>
-            )}
+              {activeTab === 'properties' && (
+                <button onClick={() => navigate('/host')} className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-full font-bold hover:bg-gray-800 transition-all active:scale-95 shadow-md">
+                  <Plus className="w-5 h-5" /> Add Property
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
@@ -201,11 +225,17 @@ export default function Admin() {
 
                   {/* Properties Table */}
                   <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                    <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                       <h3 className="font-bold text-lg">Property Listings</h3>
-                      <div className="flex gap-2">
-                        <button className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100">Filter</button>
-                        <button className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100">Export</button>
+                      <div className="relative w-full md:w-64">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input 
+                          type="text" 
+                          placeholder="Search properties..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                        />
                       </div>
                     </div>
                     <div className="overflow-x-auto">
@@ -220,7 +250,7 @@ export default function Admin() {
                           </tr>
                         </thead>
                         <tbody>
-                          {properties.map((prop: any) => (
+                          {filteredProperties.map((prop: any) => (
                             <tr key={prop.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
                               <td className="py-4 px-6">
                                 <div className="flex items-center gap-4">
@@ -260,14 +290,14 @@ export default function Admin() {
                               </td>
                             </tr>
                           ))}
-                          {properties.length === 0 && (
+                          {filteredProperties.length === 0 && (
                             <tr>
                               <td colSpan={5} className="py-16 text-center text-gray-500">
                                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                   <Home className="w-8 h-8 text-gray-400" />
                                 </div>
                                 <p className="font-medium text-lg">No properties found</p>
-                                <p className="text-sm mt-1">Get started by adding your first property.</p>
+                                <p className="text-sm mt-1">Try adjusting your search or add a new property.</p>
                               </td>
                             </tr>
                           )}
@@ -286,8 +316,30 @@ export default function Admin() {
                   exit={{ opacity: 0, y: -20 }}
                   className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden"
                 >
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                  <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h3 className="font-bold text-lg">Recent Bookings</h3>
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                      <div className="relative flex-1 md:w-64">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input 
+                          type="text" 
+                          placeholder="Search bookings..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                        />
+                      </div>
+                      <select 
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -302,7 +354,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {bookings.map((booking: any) => (
+                        {filteredBookings.map((booking: any) => (
                           <tr key={booking.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                             <td className="py-4 px-6">
                               <div className="font-bold text-gray-900">{booking.user_name}</div>
@@ -339,9 +391,9 @@ export default function Admin() {
                             </td>
                           </tr>
                         ))}
-                        {bookings.length === 0 && (
+                        {filteredBookings.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="py-16 text-center text-gray-500">No bookings found</td>
+                            <td colSpan={6} className="py-16 text-center text-gray-500">No bookings found matching your criteria</td>
                           </tr>
                         )}
                       </tbody>
@@ -358,8 +410,18 @@ export default function Admin() {
                   exit={{ opacity: 0, y: -20 }}
                   className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden"
                 >
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                  <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h3 className="font-bold text-lg">User Management</h3>
+                    <div className="relative w-full md:w-64">
+                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Search users..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                      />
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -372,7 +434,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {users.map((u: any, i: number) => (
+                        {filteredUsers.map((u: any, i: number) => (
                           <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                             <td className="py-4 px-6">
                               <div className="flex items-center gap-3">
@@ -387,16 +449,16 @@ export default function Admin() {
                             <td className="py-4 px-6 text-right">
                               <button 
                                 onClick={() => window.open(`https://wa.me/${u.user_phone.replace(/\D/g, '')}`, '_blank')}
-                                className="text-sm font-bold text-green-600 hover:text-green-700"
+                                className="text-sm font-bold text-green-600 hover:text-green-700 flex items-center justify-end gap-1 ml-auto"
                               >
-                                Message
+                                <MessageCircleIcon className="w-4 h-4" /> Message
                               </button>
                             </td>
                           </tr>
                         ))}
-                        {users.length === 0 && (
+                        {filteredUsers.length === 0 && (
                           <tr>
-                            <td colSpan={4} className="py-16 text-center text-gray-500">No users found</td>
+                            <td colSpan={4} className="py-16 text-center text-gray-500">No users found matching your search</td>
                           </tr>
                         )}
                       </tbody>

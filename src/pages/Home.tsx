@@ -12,6 +12,7 @@ import ReservationsPage from '../components/ReservationsPage';
 import FlyToAnimation from '../components/FlyToAnimation';
 import { MapIcon, ListIcon } from '../components/Icons';
 import { fetchListingsForCity } from '../services/geminiService';
+import { fetchApi } from '../lib/api';
 import { Listing, Room, NearbyPoint } from '../types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
@@ -65,10 +66,9 @@ export default function Home() {
     setSelectedListing(null);
     try {
         // Fetch from DB
-        const dbRes = await fetch('/api/properties');
         let dbListings = [];
-        if (dbRes.ok) {
-            const dbData = await dbRes.json();
+        try {
+            const dbData = await fetchApi('/api/properties');
             dbListings = dbData.map((p: any) => ({
                 id: p.id.toString(),
                 title: p.title,
@@ -90,6 +90,8 @@ export default function Home() {
                 description: p.description,
                 details: p.details || {},
             }));
+        } catch (dbErr) {
+            console.warn("Failed to fetch properties from DB, falling back to Gemini only", dbErr);
         }
 
         // Fetch from Gemini

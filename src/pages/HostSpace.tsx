@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Home, Upload, DollarSign, MapPin, CheckCircle, ChevronRight, ChevronLeft, Wifi, Coffee, Tv, Car, Wind, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchApi } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 
 const AMENITIES_LIST = [
@@ -53,14 +54,10 @@ export default function HostSpace() {
     setUploadingImage(true);
     try {
       const uploadPromises = Array.from(files).map(async (file: File) => {
-        const res = await fetch('/api/upload-url', {
+        const { uploadUrl, fileUrl } = await fetchApi('/api/upload-url', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, fileType: file.type }),
         });
-        
-        if (!res.ok) throw new Error('Failed to get upload URL');
-        const { uploadUrl, fileUrl } = await res.json();
 
         await fetch(uploadUrl, {
           method: 'PUT',
@@ -73,9 +70,9 @@ export default function HostSpace() {
 
       const uploadedUrls = await Promise.all(uploadPromises);
       setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
-      alert('Failed to upload some files. Please try again.');
+      alert(error.message || 'Failed to upload some files. Please try again.');
     } finally {
       setUploadingImage(false);
     }
@@ -100,9 +97,8 @@ export default function HostSpace() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/properties', {
+      await fetchApi('/api/properties', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: formData.title,
           description: formData.description,
@@ -119,12 +115,11 @@ export default function HostSpace() {
           owner_id: user?.id || 'anonymous',
         }),
       });
-      if (res.ok) {
-        setSuccess(true);
-        setTimeout(() => navigate('/'), 2000);
-      }
-    } catch (error) {
+      setSuccess(true);
+      setTimeout(() => navigate('/'), 2000);
+    } catch (error: any) {
       console.error('Failed to host space', error);
+      alert(error.message || 'Failed to host space. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
