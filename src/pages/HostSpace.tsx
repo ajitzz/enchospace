@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Home, Upload, DollarSign, MapPin, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchApi, fetchJson } from '../lib/api';
 
 export default function HostSpace() {
   const navigate = useNavigate();
@@ -37,14 +38,12 @@ export default function HostSpace() {
     try {
       const uploadPromises = Array.from(files).map(async (file: File) => {
         // 1. Get presigned URL
-        const res = await fetch('/api/upload-url', {
+        const { uploadUrl, fileUrl } = await fetchJson<{ uploadUrl: string; fileUrl: string }>('/api/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, fileType: file.type }),
         });
         
-        if (!res.ok) throw new Error('Failed to get upload URL');
-        const { uploadUrl, fileUrl } = await res.json();
 
         // 2. Upload file to S3
         await fetch(uploadUrl, {
@@ -77,7 +76,7 @@ export default function HostSpace() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/properties', {
+      const res = await fetchApi('/api/properties', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
