@@ -36,7 +36,6 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  details?: any;
   
   // Detailed fields
   description?: string;

@@ -10,13 +10,8 @@ dotenv.config();
 const { Pool } = pg;
 
 // Use the provided Neon DB connection string
-const dbConnectionString = process.env.DATABASE_URL;
-if (!dbConnectionString) {
-  console.warn("DATABASE_URL is not configured. Database-backed API routes will fail until it is set.");
-}
-
 const pool = new Pool({
-  connectionString: dbConnectionString,
+  connectionString: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_4cbpQjKtym9n@ep-small-smoke-a1vjxk25-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
 });
 
 const app = express();
@@ -45,21 +40,11 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
       const bookingId = session.metadata?.booking_id;
       
       if (bookingId) {
-        const result = await pool.query(
-          "UPDATE bookings SET status = 'confirmed' WHERE id = $1 RETURNING *",
+        await pool.query(
+          "UPDATE bookings SET status = 'confirmed' WHERE id = $1",
           [bookingId]
         );
         console.log(`Booking ${bookingId} confirmed via Stripe webhook.`);
-
-        // Send WhatsApp confirmation message
-        if (result.rows.length > 0) {
-          const booking = result.rows[0];
-          if (booking.user_phone) {
-            const formattedPhone = booking.user_phone.replace(/\D/g, '');
-            const message = `Hi ${booking.user_name},\n\nGreat news! Your payment for the ENCHO Space reservation has been successfully processed and your booking is now CONFIRMED.\n\nBooking ID: #${booking.id}\nMove-in Date: ${new Date(booking.start_date).toLocaleDateString()}\n\nWe look forward to hosting you!`;
-            await sendWhatsAppMessage(formattedPhone, message);
-          }
-        }
       }
     }
 
@@ -83,14 +68,10 @@ async function initDB() {
         price NUMERIC NOT NULL,
         location VARCHAR(255) NOT NULL,
         images JSONB,
-        details JSONB,
         owner_id VARCHAR(255),
         status VARCHAR(50) DEFAULT 'available',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      
-      -- Add details column if it doesn't exist (for existing tables)
-      ALTER TABLE properties ADD COLUMN IF NOT EXISTS details JSONB;
       
       CREATE TABLE IF NOT EXISTS bookings (
         id SERIAL PRIMARY KEY,
@@ -170,23 +151,6 @@ app.post("/api/upload-url", async (req, res) => {
   }
 });
 
-app.get("/api/admin/stats", async (req, res) => {
-  try {
-    const propertiesCount = await pool.query("SELECT COUNT(*) FROM properties");
-    const bookingsCount = await pool.query("SELECT COUNT(*) FROM bookings");
-    const revenue = await pool.query("SELECT SUM(total_price) FROM bookings WHERE status = 'confirmed'");
-    
-    res.json({
-      totalProperties: parseInt(propertiesCount.rows[0].count),
-      totalBookings: parseInt(bookingsCount.rows[0].count),
-      totalRevenue: parseFloat(revenue.rows[0].sum || 0)
-    });
-  } catch (error) {
-    console.error("Error fetching stats:", error);
-    res.status(500).json({ error: "Failed to fetch stats" });
-  }
-});
-
 app.get("/api/properties", async (req, res) => {
   try {
     // Try to get from Redis cache first
@@ -226,11 +190,11 @@ app.get("/api/properties", async (req, res) => {
 });
 
 app.post("/api/properties", async (req, res) => {
-  const { title, description, price, location, images, details, owner_id } = req.body;
+  const { title, description, price, location, images, owner_id } = req.body;
   try {
     const result = await pool.query(
-      "INSERT INTO properties (title, description, price, location, images, details, owner_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
-      [title, description, price, location, JSON.stringify(images || []), JSON.stringify(details || {}), owner_id || "anonymous"]
+      "INSERT INTO properties (title, description, price, location, images, owner_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [title, description, price, location, JSON.stringify(images || []), owner_id || "anonymous"]
     );
     
     // Invalidate cache
@@ -310,119 +274,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-// WhatsApp Messaging Helper
-async function sendWhatsAppMessage(to: string, message: string) {
-  const token = process.env.META_API_TOKEN;
-  const phone_number_id = process.env.PHONE_NUMBER_ID;
-
-  if (!token || !phone_number_id) {
-    console.warn("Missing META_API_TOKEN or PHONE_NUMBER_ID. WhatsApp message not sent.");
-    return;
-  }
-
-  // Ensure message is not empty or a placeholder
-  if (!message || message.trim() === "" || message.includes("Replace this sample message")) {
-    console.warn("Attempted to send an empty or placeholder WhatsApp message. Aborting.");
-    return;
-  }
-
-  try {
-    const response = await fetch(`https://graph.facebook.com/v17.0/${phone_number_id}/messages`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to,
-        type: "text",
-        text: { body: message },
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("Failed to send WhatsApp message:", data);
-    } else {
-      console.log("WhatsApp message sent successfully:", data);
-    }
-  } catch (error) {
-    console.error("Error sending WhatsApp message:", error);
-  }
-}
-
-// WhatsApp Webhook Verification
-app.get("/api/webhook/whatsapp", (req, res) => {
-  const verify_token = process.env.WHATSAPP_VERIFY_TOKEN;
-  
-  let mode = req.query["hub.mode"];
-  let token = req.query["hub.verify_token"];
-  let challenge = req.query["hub.challenge"];
-
-  if (!verify_token) {
-    return res.sendStatus(500);
-  }
-
-  if (mode && token) {
-    if (mode === "subscribe" && token === verify_token) {
-      console.log("WEBHOOK_VERIFIED");
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
-  } else {
-    res.sendStatus(400);
-  }
-});
-
-// WhatsApp Webhook Message Handler
-app.post("/api/webhook/whatsapp", async (req, res) => {
-  const body = req.body;
-
-  // Respond immediately to acknowledge receipt and prevent retries
-  res.sendStatus(200);
-
-  if (body.object) {
-    if (
-      body.entry &&
-      body.entry[0].changes &&
-      body.entry[0].changes[0] &&
-      body.entry[0].changes[0].value.messages &&
-      body.entry[0].changes[0].value.messages[0]
-    ) {
-      const messageObj = body.entry[0].changes[0].value.messages[0];
-      const from = messageObj.from;
-      const msg_body = messageObj.text?.body;
-
-      // Only process text messages that are not empty
-      if (msg_body && msg_body.trim() !== "") {
-        console.log(`Received message from ${from}: ${msg_body}`);
-
-        const lowerMsg = msg_body.toLowerCase().trim();
-        let replyMessage = "";
-
-        if (lowerMsg === "hi" || lowerMsg === "hello" || lowerMsg === "hey") {
-          replyMessage = "Hello! Welcome to ENCHO Space. How can we help you today?\n\nPlease reply with:\n'1' for Booking inquiries\n'2' for Support\n'3' to speak with an agent.";
-        } else if (lowerMsg === "1") {
-          replyMessage = "For booking inquiries, please visit our website to explore available spaces. If you have a specific property in mind, let us know the details!";
-        } else if (lowerMsg === "2") {
-          replyMessage = "For support, please describe your issue in detail, and our team will get back to you shortly.";
-        } else if (lowerMsg === "3") {
-          replyMessage = "An agent has been notified and will be with you shortly. Thank you for your patience.";
-        } else {
-          replyMessage = "Thank you for reaching out to ENCHO Space. Our team will assist you shortly. Reply 'Hi' to see the main menu.";
-        }
-
-        // Ensure we never send empty or placeholder messages
-        if (replyMessage && replyMessage.trim() !== "" && !replyMessage.includes("Replace this sample message")) {
-          await sendWhatsAppMessage(from, replyMessage);
-        }
-      }
-    }
-  }
-});
-
 app.post("/api/bookings", async (req, res) => {
   const { property_id, user_name, user_phone, start_date, end_date, total_price } = req.body;
   try {
@@ -430,15 +281,6 @@ app.post("/api/bookings", async (req, res) => {
       "INSERT INTO bookings (property_id, user_name, user_phone, start_date, end_date, total_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
       [property_id, user_name, user_phone, start_date, end_date, total_price]
     );
-    
-    // Send WhatsApp confirmation message
-    if (user_phone) {
-      const formattedPhone = user_phone.replace(/\D/g, '');
-      const message = `Hi ${user_name},\n\nThank you for choosing ENCHO Space! Your reservation request has been received.\n\nMove-in Date: ${new Date(start_date).toLocaleDateString()}\nTotal Rent: $${total_price}\n\nOur team will reach out to you shortly for assistance.`;
-      
-      await sendWhatsAppMessage(formattedPhone, message);
-    }
-
     res.json(result.rows[0]);
   } catch (e) {
     console.error(e);

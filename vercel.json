@@ -1,17 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "server.ts": {
-      "runtime": "nodejs22.x",
-      "maxDuration": 30
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/keepalive",
-      "schedule": "0 * * * *"
-    }
-  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/server.ts" },
     { "source": "/(.*)", "destination": "/index.html" }

@@ -84,15 +84,6 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
         <div className="lg:col-span-2">
           <div className="mb-10 pb-10 border-b border-gray-100">
             <h2 className="text-2xl font-bold mb-4">About this space</h2>
-            {listing.details && (
-              <div className="flex flex-wrap gap-4 mb-6 text-gray-700 font-medium">
-                {listing.details.maxGuests && <span>{listing.details.maxGuests} guests</span>}
-                {listing.details.maxGuests && <span>·</span>}
-                {listing.details.bedrooms && <span>{listing.details.bedrooms} bedrooms</span>}
-                {listing.details.bedrooms && <span>·</span>}
-                {listing.details.bathrooms && <span>{listing.details.bathrooms} baths</span>}
-              </div>
-            )}
             <p className="text-gray-600 leading-relaxed text-lg whitespace-pre-line">
               {listing.description || 'No description available for this property.'}
             </p>
@@ -101,10 +92,10 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
           <div className="mb-10 pb-10 border-b border-gray-100">
             <h2 className="text-2xl font-bold mb-6">What this place offers</h2>
             <div className="grid grid-cols-2 gap-4">
-              {(listing.details?.amenities || ['Wifi', 'Kitchen', 'Free parking', 'Pool', 'Air conditioning', 'Dedicated workspace']).map((amenity: string) => (
+              {['Wifi', 'Kitchen', 'Free parking', 'Pool', 'Air conditioning', 'Dedicated workspace'].map(amenity => (
                 <div key={amenity} className="flex items-center gap-3 text-gray-600">
                   <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="capitalize">{amenity.replace('-', ' ')}</span>
+                  <span>{amenity}</span>
                 </div>
               ))}
             </div>
