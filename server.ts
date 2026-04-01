@@ -10,8 +10,13 @@ dotenv.config();
 const { Pool } = pg;
 
 // Use the provided Neon DB connection string
+const dbConnectionString = process.env.DATABASE_URL;
+if (!dbConnectionString) {
+  console.warn("DATABASE_URL is not configured. Database-backed API routes will fail until it is set.");
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_4cbpQjKtym9n@ep-small-smoke-a1vjxk25-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+  connectionString: dbConnectionString,
 });
 
 const app = express();
@@ -307,8 +312,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
 // WhatsApp Messaging Helper
 async function sendWhatsAppMessage(to: string, message: string) {
-  const token = process.env.META_API_TOKEN || "EAAkr7Y9S2qYBQfHTNZASIugAzOi8b2MZCBct4z4jZBHSmQ2KGlFduuDQQGEYC9NRDtZBUdhMPdeJ06OjYUiJYGfFkZCAxzyh4TdidN7ZA10K3XPOVEiQh01jo22xLsQjXrEtMHc5ZCHZBbRZAyA5d0pl26Jsg3IuNKY272QYmqEjHghf11OKJmbUZBfJLe5EvHzl48gAZDZD";
-  const phone_number_id = process.env.PHONE_NUMBER_ID || "982841698238647";
+  const token = process.env.META_API_TOKEN;
+  const phone_number_id = process.env.PHONE_NUMBER_ID;
 
   if (!token || !phone_number_id) {
     console.warn("Missing META_API_TOKEN or PHONE_NUMBER_ID. WhatsApp message not sent.");
@@ -349,11 +354,15 @@ async function sendWhatsAppMessage(to: string, message: string) {
 
 // WhatsApp Webhook Verification
 app.get("/api/webhook/whatsapp", (req, res) => {
-  const verify_token = process.env.WHATSAPP_VERIFY_TOKEN || "encho_space_token";
+  const verify_token = process.env.WHATSAPP_VERIFY_TOKEN;
   
   let mode = req.query["hub.mode"];
   let token = req.query["hub.verify_token"];
   let challenge = req.query["hub.challenge"];
+
+  if (!verify_token) {
+    return res.sendStatus(500);
+  }
 
   if (mode && token) {
     if (mode === "subscribe" && token === verify_token) {

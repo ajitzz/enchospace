@@ -2,7 +2,8 @@
   "version": 2,
   "functions": {
     "server.ts": {
-      "runtime": "vercel-node@latest"
+      "runtime": "nodejs22.x",
+      "maxDuration": 30
     }
   },
   "crons": [
