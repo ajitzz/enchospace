@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import ListingCard from '../components/ListingCard';
@@ -14,6 +15,7 @@ import { MapIcon, ListIcon } from '../components/Icons';
 import { fetchListingsForCity } from '../services/geminiService';
 import { fetchApi } from '../lib/api';
 import { Listing, Room, NearbyPoint } from '../types';
+import { Sparkles, Map as MapIconLucide, LayoutGrid } from 'lucide-react';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
 
@@ -100,7 +102,7 @@ export default function Home() {
     } catch (e) {
         console.error("Failed to load listings", e);
     } finally {
-        setLoading(false);
+        setTimeout(() => setLoading(false), 800); // Artificial delay for smooth transition
     }
   };
 
@@ -162,62 +164,151 @@ export default function Home() {
       }
   };
 
-  if (currentView === 'DETAILS' && selectedListing) {
-      return (
-         <>
-         {flyAnimation && (
-            <FlyToAnimation listing={flyAnimation.listing} target={flyAnimation.target} onComplete={handleAnimationComplete} />
-         )}
-         <ListingDetails 
-            listing={selectedListing} 
-            onBack={() => setCurrentView('SEARCH')}
-            similarListings={listings.filter(l => l.id !== selectedListing.id)}
-            onListingClick={handleListingClick}
-            isFavorite={isFavorite(selectedListing.id)}
-            onToggleFavorite={toggleFavorite}
-            onBook={handleBooking}
-         />
-         </>
-      );
-  }
+  const renderContent = () => {
+    switch (currentView) {
+        case 'DETAILS':
+            return selectedListing && (
+                <ListingDetails 
+                    listing={selectedListing} 
+                    onBack={() => setCurrentView('SEARCH')}
+                    similarListings={listings.filter(l => l.id !== selectedListing.id)}
+                    onListingClick={handleListingClick}
+                    isFavorite={isFavorite(selectedListing.id)}
+                    onToggleFavorite={toggleFavorite}
+                    onBook={handleBooking}
+                />
+            );
+        case 'WISHLIST':
+            return (
+                <WishlistPage 
+                    favorites={favorites}
+                    onBack={() => setCurrentView('SEARCH')}
+                    onListingClick={handleListingClick}
+                    onToggleFavorite={toggleFavorite}
+                />
+            );
+        case 'RESERVATIONS':
+            return (
+                <ReservationsPage 
+                    reservations={reservations}
+                    onBack={() => setCurrentView('SEARCH')}
+                    onListingClick={handleListingClick}
+                />
+            );
+        case 'BOOKING':
+            return selectedListing && lastBooking && (
+                <BookingPage 
+                    listing={selectedListing}
+                    bookingDetails={lastBooking}
+                    onBackToHome={() => {
+                        setCurrentView('SEARCH');
+                        setFlyAnimation({ listing: selectedListing, target: 'RESERVES' });
+                    }}
+                />
+            );
+        default:
+            return (
+                <div className="max-w-[1920px] mx-auto pt-6 px-4 md:px-8 relative">
+                    {/* View Toggle Button (Mobile) */}
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] xl:hidden">
+                        <button 
+                            onClick={() => setShowMap(!showMap)}
+                            className="bg-black text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-3 font-black uppercase tracking-widest text-xs transition-all duration-500 hover:scale-105 active:scale-95 border border-white/10"
+                        >
+                            {showMap ? (
+                                <><LayoutGrid className="w-4 h-4" /> Show list</>
+                            ) : (
+                                <><MapIconLucide className="w-4 h-4" /> Show Map</>
+                            )}
+                        </button>
+                    </div>
 
-  if (currentView === 'WISHLIST') {
-      return (
-          <WishlistPage 
-            favorites={favorites}
-            onBack={() => setCurrentView('SEARCH')}
-            onListingClick={handleListingClick}
-            onToggleFavorite={toggleFavorite}
-          />
-      );
-  }
+                    <div className="flex gap-12 items-start pb-24">
+                        <div className={`flex-1 min-w-0 transition-all duration-500 ${showMap ? 'hidden opacity-0 xl:block xl:opacity-100' : 'block opacity-100'}`}>
+                            {!loading && (
+                                <motion.div 
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4"
+                                >
+                                    <div>
+                                        <div className="flex items-center gap-2 text-brand font-black uppercase tracking-[0.2em] text-[10px] mb-2">
+                                            <Sparkles className="w-3 h-3" />
+                                            Featured Stays
+                                        </div>
+                                        <h1 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter leading-none">
+                                            Discover {city}
+                                        </h1>
+                                    </div>
+                                    <div className="flex items-center gap-3 glass px-4 py-2 rounded-2xl border-white/40">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                        <span className="text-sm font-black text-gray-900 tracking-tight">{listings.length}+ Stays Available</span>
+                                    </div>
+                                </motion.div>
+                            )}
 
-  if (currentView === 'RESERVATIONS') {
-      return (
-          <ReservationsPage 
-            reservations={reservations}
-            onBack={() => setCurrentView('SEARCH')}
-            onListingClick={handleListingClick}
-          />
-      );
-  }
+                            {loading ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                                        <div key={n} className="flex flex-col gap-4">
+                                            <div className="aspect-[4/3] shimmer-bg rounded-[2rem] w-full"></div>
+                                            <div className="space-y-2">
+                                                <div className="h-6 shimmer-bg rounded-full w-3/4"></div>
+                                                <div className="h-4 shimmer-bg rounded-full w-1/2"></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <motion.div 
+                                    layout
+                                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12"
+                                >
+                                    <AnimatePresence mode="popLayout">
+                                        {listings.map((listing) => (
+                                            <ListingCard 
+                                                key={listing.id} 
+                                                listing={listing} 
+                                                onHover={setHoveredListingId}
+                                                onClick={handleListingClick}
+                                                isFavorite={isFavorite(listing.id)}
+                                                onToggleFavorite={toggleFavorite}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
+                                </motion.div>
+                            )}
+                            
+                            {!loading && listings.length > 0 && (
+                                <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    whileInView={{ opacity: 1 }}
+                                    className="mt-20 flex flex-col items-center gap-6 p-12 bg-gray-50 rounded-[3rem] border border-gray-100"
+                                >
+                                    <div className="text-center">
+                                        <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Continue exploring {city}</h3>
+                                        <p className="text-gray-500 font-medium">We've found even more amazing places for you.</p>
+                                    </div>
+                                    <button className="btn-primary px-12 py-5 text-lg shadow-2xl shadow-brand/20">Show more results</button>
+                                </motion.div>
+                            )}
+                        </div>
 
-  if (currentView === 'BOOKING' && selectedListing && lastBooking) {
-      return (
-          <BookingPage 
-            listing={selectedListing}
-            bookingDetails={lastBooking}
-            onBackToHome={() => {
-                setCurrentView('SEARCH');
-                // Trigger fly-to-cart animation for the reservation
-                setFlyAnimation({ listing: selectedListing, target: 'RESERVES' });
-            }}
-          />
-      );
-  }
+                        {/* Map Sidebar */}
+                        <motion.div 
+                            layout
+                            className={`xl:block xl:sticky xl:top-32 xl:w-[45%] xl:h-[calc(100vh-160px)] xl:rounded-[2.5rem] xl:overflow-hidden xl:z-0 xl:shadow-2xl xl:shadow-black/5 border border-gray-100 ${showMap ? 'fixed inset-0 top-[130px] z-30 block w-full h-[calc(100vh-130px)] bg-gray-50' : 'hidden'}`}
+                        >
+                            <MapSidebar listings={listings} highlightedId={hoveredListingId} className="w-full h-full" />
+                        </motion.div>
+                    </div>
+                </div>
+            );
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-[#E31C5F]/20 selection:text-[#E31C5F]">
+    <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-brand/20 selection:text-brand">
       {/* Global Fly Animation Overlay */}
       {flyAnimation && (
         <FlyToAnimation 
@@ -237,69 +328,20 @@ export default function Home() {
         reservesCount={reservations.length}
         wishlistCount={favorites.length}
       />
+      
       <FilterBar />
 
-      <main className="max-w-[1920px] mx-auto pt-6 px-4 md:px-6 relative">
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] xl:hidden">
-            <button 
-                onClick={() => setShowMap(!showMap)}
-                className="bg-[#111111] hover:bg-black text-white px-6 py-3.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.25)] flex items-center gap-2.5 font-bold tracking-wide transition-all duration-300 hover:scale-105 active:scale-95 border border-white/20"
-            >
-                {showMap ? (
-                    <><span>Show list</span><ListIcon className="w-4 h-4" /></>
-                ) : (
-                    <><span>Map</span><MapIcon className="w-4 h-4" /></>
-                )}
-            </button>
-        </div>
-
-        <div className="flex gap-8 items-start pb-24 xl:pb-20">
-          <div className={`flex-1 min-w-0 transition-opacity duration-300 ${showMap ? 'hidden opacity-0 xl:block xl:opacity-100' : 'block opacity-100'}`}>
-             {!loading && (
-                 <div className="mb-6 flex items-baseline gap-2">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Places to stay in {city}</h1>
-                    <span className="text-gray-500 font-medium text-sm border-l border-gray-300 pl-3 ml-1">{listings.length}+ stays</span>
-                 </div>
-             )}
-
-            {loading ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
-                        <div key={n} className="flex flex-col gap-3 animate-pulse">
-                            <div className="aspect-[4/3] bg-gray-100 rounded-2xl w-full"></div>
-                            <div className="h-4 bg-gray-100 rounded-full w-2/3 mt-2"></div>
-                            <div className="h-4 bg-gray-100 rounded-full w-1/3"></div>
-                        </div>
-                    ))}
-                 </div>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-6 gap-y-10">
-                {listings.map((listing) => (
-                    <ListingCard 
-                        key={listing.id} 
-                        listing={listing} 
-                        onHover={setHoveredListingId}
-                        onClick={handleListingClick}
-                        isFavorite={isFavorite(listing.id)}
-                        onToggleFavorite={toggleFavorite}
-                    />
-                ))}
-                </div>
-            )}
-            
-             {!loading && (
-                <div className="mt-12 flex flex-col items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-900">Continue exploring {city}</h3>
-                    <button className="px-8 py-3.5 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all active:scale-95 shadow-lg">Show more</button>
-                </div>
-            )}
-          </div>
-
-          <div className={`xl:block xl:sticky xl:top-[160px] xl:w-[45%] xl:h-[calc(100vh-180px)] xl:rounded-2xl xl:overflow-hidden xl:z-0 xl:shadow-2xl ${showMap ? 'fixed inset-0 top-[130px] z-30 block w-full h-[calc(100vh-130px)] bg-gray-50' : 'hidden'}`}>
-             <MapSidebar listings={listings} highlightedId={hoveredListingId} className="w-full h-full" />
-          </div>
-        </div>
-      </main>
+      <AnimatePresence mode="wait">
+        <motion.div
+            key={currentView}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+        >
+            {renderContent()}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
