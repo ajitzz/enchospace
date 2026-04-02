@@ -347,7 +347,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-// WhatsApp Messaging Helper - REMOVED
 
 app.post("/api/bookings", async (req, res) => {
   const { property_id, user_name, user_phone, start_date, end_date, total_price } = req.body;

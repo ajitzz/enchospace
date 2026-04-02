@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Listing } from '../types';
-import { ShieldCheck, StarIcon, HouseIcon, PhoneIcon } from './Icons';
+import { ShieldCheck, StarIcon, HouseIcon } from './Icons';
 
 interface BookingPageProps {
   listing: Listing;
@@ -102,21 +102,6 @@ const BookingPage: React.FC<BookingPageProps> = ({ listing, bookingDetails, onBa
                   <div className="text-xs text-gray-500 leading-relaxed">
                       * This is an estimate. Final lease terms including deposit and maintenance fees will be confirmed by the property manager upon approval of your application.
                   </div>
-              </div>
-
-              {/* Next Steps */}
-              <div className="bg-[#E7F6EC] rounded-2xl p-5 border border-[#D1E8D9] mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-4">
-                   <div className="text-center sm:text-left">
-                       <h3 className="font-bold text-[#0F5C2E] text-base mb-1">What happens next?</h3>
-                       <p className="text-sm text-[#0F5C2E]/90 font-medium">
-                          Our team will reach out to you shortly for assistance.
-                       </p>
-                   </div>
-                   <div className="flex gap-3 shrink-0">
-                       <a href="tel:+1234567890" className="w-12 h-12 bg-black rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform">
-                           <PhoneIcon className="w-5 h-5 text-white" />
-                       </a>
-                   </div>
               </div>
 
               {/* Action Buttons */}
