@@ -9,19 +9,34 @@ dotenv.config();
 const { Pool } = pg;
 
 // Use the provided Neon DB connection string
-const requiredEnvVars = ["DATABASE_URL"] as const;
-const missingRequiredEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
-
-if (missingRequiredEnvVars.length > 0) {
-  const message = `Missing required environment variables: ${missingRequiredEnvVars.join(", ")}`;
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(message);
-  }
-  console.warn(`${message}. Database operations will fail until these are set.`);
+if (!process.env.DATABASE_URL) {
+  console.warn("DATABASE_URL is not set. Database operations will fail.");
 }
+// Database Pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Robust query wrapper with error handling
+async function dbQuery(text: string, params?: any[]) {
+  try {
+    const start = Date.now();
+    const res = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Executed query', { text, duration, rows: res.rowCount });
+    }
+    return res;
+  } catch (error: any) {
+    console.error('Database Query Error:', {
+      text,
+      error: error.message,
+      code: error.code
+    });
+    throw error;
+  }
+}
 
 const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 const isServerlessRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) || isVercelRuntime;
@@ -43,13 +58,13 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
 
   try {
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2023-10-16" as any });
     
     const event = stripe.webhooks.constructEvent(req.body, sig as string, endpointSecret);
 
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const bookingId = "metadata" in session ? session.metadata?.booking_id : undefined;
+      const session = event.data.object as any;
+      const bookingId = session.metadata?.booking_id;
       
       if (bookingId) {
         await pool.query(
@@ -61,10 +76,9 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
     }
 
     res.json({ received: true });
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown webhook error";
-    console.error(`Webhook Error: ${errorMessage}`);
-    res.status(400).send(`Webhook Error: ${errorMessage}`);
+  } catch (err: any) {
+    console.error(`Webhook Error: ${err.message}`);
+    res.status(400).send(`Webhook Error: ${err.message}`);
   }
 });
 
@@ -326,7 +340,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     }
 
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -392,7 +406,7 @@ async function setupVite() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get("/*path", (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
     console.log("Static file serving initialized from /dist.");
@@ -403,15 +417,8 @@ async function setupVite() {
 async function startServer() {
   await initDB();
   
-  // API 404 Handlers - MUST be after all API routes but BEFORE setupVite
-  app.use("/api", (req, res, next) => {
-    if (req.path === "/" || req.path === "") {
-      return res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
-    }
-    next();
-  });
-
-  app.use("/api/*path", (req, res) => {
+  // API 404 Handler - MUST be after all API routes but BEFORE setupVite
+  app.use("/api/*", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
   });
 

@@ -25,6 +25,10 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
   const nextImage = () => setActiveImageIndex((prev) => (prev + 1) % images.length);
   const prevImage = () => setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
 
+  const isVideo = (url: string) => url.match(/\.(mp4|webm|ogg)$/i) != null || url.includes('video');
+  const isAudio = (url: string) => url.match(/\.(mp3|wav|ogg)$/i) != null || url.includes('audio');
+  const isDoc = (url: string) => url.match(/\.(pdf|doc|docx)$/i) != null;
+
   const amenityIcons: Record<string, any> = {
     'Wifi': Wifi,
     'Kitchen': Coffee,
@@ -40,16 +44,60 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
       {/* Hero Section */}
       <div className="relative h-[70vh] w-full overflow-hidden bg-black">
         <AnimatePresence mode="wait">
-          <motion.img
-            key={activeImageIndex}
-            src={images[activeImageIndex]}
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="absolute inset-0 w-full h-full object-cover opacity-80"
-            referrerPolicy="no-referrer"
-          />
+          {isVideo(images[activeImageIndex]) ? (
+            <motion.video
+              key={activeImageIndex}
+              src={images[activeImageIndex]}
+              autoPlay
+              muted
+              loop
+              playsInline
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 w-full h-full object-cover opacity-80"
+            />
+          ) : isAudio(images[activeImageIndex]) ? (
+            <motion.div
+              key={activeImageIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-brand/10"
+            >
+              <Music className="w-24 h-24 text-brand mb-4" />
+              <audio src={images[activeImageIndex]} controls className="w-64" />
+            </motion.div>
+          ) : isDoc(images[activeImageIndex]) ? (
+            <motion.div
+              key={activeImageIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-blue-50/10"
+            >
+              <FileText className="w-24 h-24 text-blue-500 mb-4" />
+              <a 
+                href={images[activeImageIndex]} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-8 py-4 bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all"
+              >
+                View Document
+              </a>
+            </motion.div>
+          ) : (
+            <motion.img
+              key={activeImageIndex}
+              src={images[activeImageIndex]}
+              initial={{ opacity: 0, scale: 1.1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="absolute inset-0 w-full h-full object-cover opacity-80"
+              referrerPolicy="no-referrer"
+            />
+          )}
         </AnimatePresence>
         
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
