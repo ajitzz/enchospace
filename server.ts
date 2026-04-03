@@ -395,7 +395,14 @@ async function setupVite() {
 async function startServer() {
   await initDB();
   
-  // API 404 Handler - MUST be after all API routes but BEFORE setupVite
+  // API 404 Handlers - MUST be after all API routes but BEFORE setupVite
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/" || req.path === "") {
+      return res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
+    }
+    next();
+  });
+
   app.use("/api/*path", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
   });
