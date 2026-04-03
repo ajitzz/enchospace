@@ -18,6 +18,8 @@ const pool = new Pool({
 
 const app = express();
 const PORT = 3000;
+const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const isServerlessRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) || isVercelRuntime;
 
 app.use(cors());
 
@@ -366,6 +368,10 @@ app.post("/api/bookings", async (req, res) => {
 
 // Vite middleware for development
 async function setupVite() {
+  if (isServerlessRuntime) {
+    return;
+  }
+
   if (process.env.NODE_ENV !== "production") {
     try {
       const { createServer: createViteServer } = await import("vite");
@@ -399,11 +405,18 @@ async function startServer() {
 
   await setupVite();
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  });
+  if (!isServerlessRuntime) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    });
+    return;
+  }
+
+  console.log("Serverless runtime detected; Express app initialized without app.listen().");
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Failed to start server:", error);
+});
 
 export default app;

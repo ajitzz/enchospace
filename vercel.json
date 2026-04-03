@@ -1,8 +1,13 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "functions": {
     "server.ts": {
-      "runtime": "vercel-node@latest"
+      "runtime": "nodejs22.x",
+      "maxDuration": 60
     }
   },
   "crons": [
