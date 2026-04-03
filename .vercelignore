@@ -1,0 +1,6 @@
+node_modules
+dist
+migrated_prompt_history
+.git
+.DS_Store
+*.log
