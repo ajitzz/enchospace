@@ -74,6 +74,26 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
 
 app.use(express.json());
 
+async function withRedis<T>(operation: (redis: any) => Promise<T>): Promise<T | null> {
+  if (!process.env.UPSTASH_REDIS_URL) {
+    return null;
+  }
+
+  const { Redis } = await import("ioredis");
+  const redis = new Redis(process.env.UPSTASH_REDIS_URL, {
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    lazyConnect: true,
+  });
+
+  try {
+    await redis.connect();
+    return await operation(redis);
+  } finally {
+    redis.disconnect();
+  }
+}
+
 // Initialize DB tables
 async function initDB() {
   if (!pool) {
@@ -264,33 +284,21 @@ app.get("/api/properties", async (req, res) => {
   if (!db) return;
 
   try {
-    // Try to get from Redis cache first
-    let cachedProperties = null;
-    let redis = null;
-    
-    if (process.env.UPSTASH_REDIS_URL) {
-      const { Redis } = await import("ioredis");
-      redis = new Redis(process.env.UPSTASH_REDIS_URL);
-      try {
-        const cached = await redis.get("properties:all");
-        if (cached) {
-          cachedProperties = JSON.parse(cached);
-          return res.json(cachedProperties);
-        }
-      } catch (redisError) {
-        console.warn("Redis error:", redisError);
+    try {
+      const cached = await withRedis((redis) => redis.get("properties:all"));
+      if (typeof cached === "string") {
+        return res.json(JSON.parse(cached));
       }
+    } catch (redisError) {
+      console.warn("Redis read error:", redisError);
     }
 
     const result = await db.query("SELECT * FROM properties ORDER BY created_at DESC");
-    
-    // Cache the result in Redis for 5 minutes
-    if (redis) {
-      try {
-        await redis.set("properties:all", JSON.stringify(result.rows), "EX", 300);
-      } catch (redisError) {
-        console.warn("Redis set error:", redisError);
-      }
+
+    try {
+      await withRedis((redis) => redis.set("properties:all", JSON.stringify(result.rows), "EX", 300));
+    } catch (redisError) {
+      console.warn("Redis write error:", redisError);
     }
 
     res.json(result.rows);
@@ -311,12 +319,10 @@ app.post("/api/properties", async (req, res) => {
       [title, description, price, location, JSON.stringify(images || []), JSON.stringify(details || {}), owner_id || "anonymous"]
     );
     
-    // Invalidate cache
-    if (process.env.UPSTASH_REDIS_URL) {
-      const { Redis } = await import("ioredis");
-      const redis = new Redis(process.env.UPSTASH_REDIS_URL);
-      await redis.del("properties:all").catch(e => console.warn("Redis del error:", e));
-    }
+    await withRedis((redis) => redis.del("properties:all")).catch((e) => {
+      console.warn("Redis del error:", e);
+      return null;
+    });
 
     res.json(result.rows[0]);
   } catch (e) {
@@ -334,12 +340,10 @@ app.delete("/api/properties/:id", async (req, res) => {
     await db.query("DELETE FROM bookings WHERE property_id = $1", [id]);
     await db.query("DELETE FROM properties WHERE id = $1", [id]);
     
-    // Invalidate cache
-    if (process.env.UPSTASH_REDIS_URL) {
-      const { Redis } = await import("ioredis");
-      const redis = new Redis(process.env.UPSTASH_REDIS_URL);
-      await redis.del("properties:all").catch(e => console.warn("Redis del error:", e));
-    }
+    await withRedis((redis) => redis.del("properties:all")).catch((e) => {
+      console.warn("Redis del error:", e);
+      return null;
+    });
 
     res.json({ success: true });
   } catch (e) {
