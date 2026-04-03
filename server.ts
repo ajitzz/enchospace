@@ -9,8 +9,15 @@ dotenv.config();
 const { Pool } = pg;
 
 // Use the provided Neon DB connection string
-if (!process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL is not set. Database operations will fail.");
+const requiredEnvVars = ["DATABASE_URL"] as const;
+const missingRequiredEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+
+if (missingRequiredEnvVars.length > 0) {
+  const message = `Missing required environment variables: ${missingRequiredEnvVars.join(", ")}`;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(message);
+  }
+  console.warn(`${message}. Database operations will fail until these are set.`);
 }
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -36,13 +43,13 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
 
   try {
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2023-10-16" as any });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
     
     const event = stripe.webhooks.constructEvent(req.body, sig as string, endpointSecret);
 
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as any;
-      const bookingId = session.metadata?.booking_id;
+      const session = event.data.object;
+      const bookingId = "metadata" in session ? session.metadata?.booking_id : undefined;
       
       if (bookingId) {
         await pool.query(
@@ -54,9 +61,10 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
     }
 
     res.json({ received: true });
-  } catch (err: any) {
-    console.error(`Webhook Error: ${err.message}`);
-    res.status(400).send(`Webhook Error: ${err.message}`);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown webhook error";
+    console.error(`Webhook Error: ${errorMessage}`);
+    res.status(400).send(`Webhook Error: ${errorMessage}`);
   }
 });
 
@@ -318,7 +326,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     }
 
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -384,7 +392,7 @@ async function setupVite() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('/{*path}', (req, res) => {
+    app.get("/*path", (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
     console.log("Static file serving initialized from /dist.");
