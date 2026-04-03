@@ -12,9 +12,19 @@ const { Pool } = pg;
 if (!process.env.DATABASE_URL) {
   console.warn("DATABASE_URL is not set. Database operations will fail.");
 }
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+    })
+  : null;
+
+function requirePool(res: express.Response) {
+  if (!pool) {
+    res.status(503).json({ error: "Database is not configured" });
+    return null;
+  }
+  return pool;
+}
 
 const app = express();
 const PORT = 3000;
@@ -25,6 +35,9 @@ app.use(cors());
 
 // Stripe Webhook MUST be before express.json()
 app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -44,7 +57,7 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
       const bookingId = session.metadata?.booking_id;
       
       if (bookingId) {
-        await pool.query(
+        await db.query(
           "UPDATE bookings SET status = 'confirmed' WHERE id = $1 RETURNING *",
           [bookingId]
         );
@@ -63,6 +76,11 @@ app.use(express.json());
 
 // Initialize DB tables
 async function initDB() {
+  if (!pool) {
+    console.warn("Skipping DB initialization because DATABASE_URL is not configured.");
+    return;
+  }
+
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS properties (
@@ -110,7 +128,7 @@ app.use((req, res, next) => {
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok",
-    database: pool ? "connected" : "disconnected",
+    database: pool ? "configured" : "not configured",
     redis: process.env.UPSTASH_REDIS_URL ? "configured" : "not configured",
     s3: process.env.AWS_S3_BUCKET_NAME ? "configured" : "not configured",
     stripe: process.env.STRIPE_SECRET_KEY ? "configured" : "not configured"
@@ -119,8 +137,11 @@ app.get("/api/health", (req, res) => {
 
 // Keep-alive endpoint for Vercel Cron to prevent DB from sleeping
 app.get("/api/cron/keepalive", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   try {
-    await pool.query("SELECT 1");
+    await db.query("SELECT 1");
     res.json({ status: "Database is awake" });
   } catch (e) {
     console.error("Keepalive failed:", e);
@@ -165,10 +186,13 @@ app.post("/api/upload-url", async (req, res) => {
 });
 
 app.get("/api/admin/stats", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   try {
-    const propertiesCount = await pool.query("SELECT COUNT(*) FROM properties");
-    const bookingsCount = await pool.query("SELECT COUNT(*) FROM bookings");
-    const revenue = await pool.query("SELECT SUM(total_price) FROM bookings WHERE status = 'confirmed'");
+    const propertiesCount = await db.query("SELECT COUNT(*) FROM properties");
+    const bookingsCount = await db.query("SELECT COUNT(*) FROM bookings");
+    const revenue = await db.query("SELECT SUM(total_price) FROM bookings WHERE status = 'confirmed'");
     
     res.json({
       totalProperties: parseInt(propertiesCount.rows[0].count),
@@ -182,8 +206,11 @@ app.get("/api/admin/stats", async (req, res) => {
 });
 
 app.get("/api/admin/bookings", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   try {
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT b.*, p.title as property_title 
       FROM bookings b 
       JOIN properties p ON b.property_id = p.id 
@@ -197,9 +224,12 @@ app.get("/api/admin/bookings", async (req, res) => {
 });
 
 app.get("/api/admin/users", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   try {
     // For now, we'll list unique users from bookings as a proxy for user management
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT DISTINCT ON (user_phone) user_name, user_phone, created_at 
       FROM bookings 
       ORDER BY user_phone, created_at DESC
@@ -212,10 +242,13 @@ app.get("/api/admin/users", async (req, res) => {
 });
 
 app.patch("/api/admin/bookings/:id", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   const { id } = req.params;
   const { status } = req.body;
   try {
-    const result = await pool.query(
+    const result = await db.query(
       "UPDATE bookings SET status = $1 WHERE id = $2 RETURNING *",
       [status, id]
     );
@@ -227,6 +260,9 @@ app.patch("/api/admin/bookings/:id", async (req, res) => {
 });
 
 app.get("/api/properties", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   try {
     // Try to get from Redis cache first
     let cachedProperties = null;
@@ -246,7 +282,7 @@ app.get("/api/properties", async (req, res) => {
       }
     }
 
-    const result = await pool.query("SELECT * FROM properties ORDER BY created_at DESC");
+    const result = await db.query("SELECT * FROM properties ORDER BY created_at DESC");
     
     // Cache the result in Redis for 5 minutes
     if (redis) {
@@ -265,9 +301,12 @@ app.get("/api/properties", async (req, res) => {
 });
 
 app.post("/api/properties", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   const { title, description, price, location, images, details, owner_id } = req.body;
   try {
-    const result = await pool.query(
+    const result = await db.query(
       "INSERT INTO properties (title, description, price, location, images, details, owner_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
       [title, description, price, location, JSON.stringify(images || []), JSON.stringify(details || {}), owner_id || "anonymous"]
     );
@@ -287,10 +326,13 @@ app.post("/api/properties", async (req, res) => {
 });
 
 app.delete("/api/properties/:id", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   const { id } = req.params;
   try {
-    await pool.query("DELETE FROM bookings WHERE property_id = $1", [id]);
-    await pool.query("DELETE FROM properties WHERE id = $1", [id]);
+    await db.query("DELETE FROM bookings WHERE property_id = $1", [id]);
+    await db.query("DELETE FROM properties WHERE id = $1", [id]);
     
     // Invalidate cache
     if (process.env.UPSTASH_REDIS_URL) {
@@ -352,9 +394,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
 // WhatsApp Messaging Helper - REMOVED
 
 app.post("/api/bookings", async (req, res) => {
+  const db = requirePool(res);
+  if (!db) return;
+
   const { property_id, user_name, user_phone, start_date, end_date, total_price } = req.body;
   try {
-    const result = await pool.query(
+    const result = await db.query(
       "INSERT INTO bookings (property_id, user_name, user_phone, start_date, end_date, total_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
       [property_id, user_name, user_phone, start_date, end_date, total_price]
     );
@@ -399,7 +444,7 @@ async function startServer() {
   await initDB();
   
   // API 404 Handler - MUST be after all API routes but BEFORE setupVite
-  app.use("/api/*", (req, res) => {
+  app.use("/api/{*path}", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
   });
 
