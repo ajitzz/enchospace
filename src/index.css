@@ -59,33 +59,49 @@
 
 @layer components {
   .glass {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20;
+    @apply bg-white/70 backdrop-blur-2xl border border-white/20;
   }
   
   .glass-dark {
-    @apply bg-black/70 backdrop-blur-xl border border-white/10;
+    @apply bg-black/80 backdrop-blur-2xl border border-white/10;
   }
   
   .btn-primary {
-    @apply bg-brand text-white font-bold py-3 px-6 rounded-2xl hover:bg-brand-dark transition-all active:scale-95 shadow-lg shadow-brand/20;
+    @apply bg-brand text-white font-black uppercase tracking-widest text-[10px] py-4 px-8 rounded-2xl hover:bg-brand-dark transition-all active:scale-95 shadow-2xl shadow-brand/30 border border-brand/20;
   }
   
   .btn-secondary {
-    @apply bg-white text-gray-900 font-bold py-3 px-6 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all active:scale-95;
+    @apply bg-white text-gray-900 font-black uppercase tracking-widest text-[10px] py-4 px-8 rounded-2xl border-2 border-gray-100 hover:bg-gray-50 transition-all active:scale-95 shadow-xl shadow-black/5;
   }
   
   .input-field {
-    @apply w-full px-4 py-4 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-brand focus:border-transparent outline-none transition-all bg-gray-50/50;
+    @apply w-full px-6 py-4 rounded-2xl border-2 border-gray-100 focus:border-brand outline-none transition-all bg-gray-50/50 font-bold text-gray-900 placeholder:text-gray-400 placeholder:font-black placeholder:uppercase placeholder:tracking-widest placeholder:text-[10px];
   }
   
   .card-hover {
-    @apply transition-all duration-500 hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1;
+    @apply transition-all duration-700 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] hover:-translate-y-2;
   }
   
   .shimmer-bg {
     background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
     background-size: 200% 100%;
     @apply animate-shimmer;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-800 to-gray-600;
+  }
+
+  .neon-glow {
+    @apply shadow-[0_0_20px_rgba(227,28,95,0.3)];
+  }
+
+  .mask-fade-bottom {
+    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  }
+
+  .mask-fade-top {
+    mask-image: linear-gradient(to top, black 80%, transparent 100%);
   }
 }
 
