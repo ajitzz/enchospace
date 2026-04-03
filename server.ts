@@ -16,6 +16,9 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const isServerlessRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) || isVercelRuntime;
+
 const app = express();
 const PORT = 3000;
 
@@ -399,12 +402,14 @@ async function startServer() {
 
   await setupVite();
 
-  if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-    });
+  if (!isServerlessRuntime) {
+    if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+      });
+    }
   } else {
-    console.log("Server initialized for Vercel serverless environment.");
+    console.log("Serverless runtime detected; Express app initialized without app.listen().");
   }
 }
 
