@@ -384,7 +384,7 @@ async function setupVite() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('/{*path}', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
     console.log("Static file serving initialized from /dist.");
@@ -396,7 +396,7 @@ async function startServer() {
   await initDB();
   
   // API 404 Handler - MUST be after all API routes but BEFORE setupVite
-  app.use("/api/*", (req, res) => {
+  app.use("/api/*path", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
   });
 
