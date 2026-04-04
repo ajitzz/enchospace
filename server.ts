@@ -54,6 +54,24 @@ const isServerlessRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) || isV
 const app = express();
 const PORT = 3000;
 
+function formatUnknownError(err: unknown) {
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  return {
+    message: errorMessage,
+    code: (err as any)?.code,
+    statusCode: (err as any)?.statusCode,
+  };
+}
+
+async function getStripeClient() {
+  if (!env.STRIPE_SECRET_KEY) {
+    return null;
+  }
+
+  const Stripe = (await import("stripe")).default;
+  return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
+}
+
 // Explicit CORS whitelist
 app.use(cors({
   origin: (origin, callback) => {
@@ -99,15 +117,18 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
   }
 
   try {
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
-    
+    const stripe = await getStripeClient();
+    if (!stripe) {
+      logger.warn("Stripe webhook received but STRIPE_SECRET_KEY is not configured.");
+      return res.status(503).json({ error: "Stripe is not configured" });
+    }
+
     const event = stripe.webhooks.constructEvent(req.body, sig as string, endpointSecret);
     logger.info(`Stripe Webhook Received: ${event.type}`, { id: event.id });
 
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as { metadata?: { booking_id?: string } };
-      const bookingId = session.metadata?.booking_id;
+      const session = event.data.object as any;
+      const bookingId = session?.metadata?.booking_id;
       
       if (bookingId) {
         await dbQuery(
@@ -120,9 +141,9 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
 
     res.json({ received: true });
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error(`Stripe Webhook Error: ${errorMessage}`);
-    res.status(400).send(`Webhook Error: ${errorMessage}`);
+    const { message, code, statusCode } = formatUnknownError(err);
+    logger.error("Stripe Webhook Error", { message, code, statusCode });
+    res.status(400).send(`Webhook Error: ${message}`);
   }
 });
 
@@ -220,6 +241,11 @@ app.post("/api/upload-url", async (req, res) => {
 
     if (fileSize && fileSize > 10 * 1024 * 1024) { // 10MB limit
       return res.status(400).json({ error: "File size exceeds 10MB limit" });
+    }
+
+    if (!env.AWS_REGION || !env.AWS_ACCESS_KEY_ID || !env.AWS_SECRET_ACCESS_KEY || !env.AWS_S3_BUCKET_NAME) {
+      logger.warn("S3 upload requested but S3 environment variables are not fully configured.");
+      return res.status(503).json({ error: "S3 upload service is not configured" });
     }
 
     const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
@@ -423,13 +449,11 @@ app.post("/api/create-checkout-session", validateRequest(paymentSchema), async (
   try {
     const { property_id, title, total_price, user_name, booking_id } = req.body;
     
-    if (!env.STRIPE_SECRET_KEY) {
+    const stripe = await getStripeClient();
+    if (!stripe) {
       logger.warn("Stripe secret key not configured, using mock payment.");
-      return res.json({ url: `/payment?success=true&property_id=${property_id}` });
+      return res.json({ url: `/payment?mock=true&success=true&property_id=${property_id}` });
     }
-
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -495,7 +519,7 @@ async function setupVite() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get("/{*path}", (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
     console.log("Static file serving initialized from /dist.");
@@ -526,7 +550,7 @@ async function startServer() {
   await initDB();
   
   // API 404 Handler - MUST be after all API routes but BEFORE setupVite
-  app.use("/api/*", (req, res) => {
+  app.use("/api/{*path}", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}`, timestamp: new Date().toISOString() });
   });
 
