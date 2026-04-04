@@ -17,6 +17,7 @@ interface Props {
   onToggleFavorite: (listing: Listing) => void;
   onBook: (data: {
     moveInDate: string;
+    moveOutDate: string;
     configuration: string;
     name: string;
     phone: string;
@@ -296,13 +297,21 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
                     </div>
 
                     <button 
-                        onClick={() => onBook({ 
-                            moveInDate: new Date().toISOString(), 
-                            configuration: 'Standard', 
-                            name: 'Guest', 
-                            phone: '1234567890', 
-                            totalRent: listing.price 
-                        })}
+                        onClick={() => {
+                            const moveIn = new Date();
+                            moveIn.setDate(moveIn.getDate() + 1); // Tomorrow
+                            const moveOut = new Date(moveIn);
+                            moveOut.setDate(moveOut.getDate() + 5); // 5 days later
+                            
+                            onBook({
+                                moveInDate: moveIn.toISOString(), 
+                                moveOutDate: moveOut.toISOString(),
+                                configuration: 'Standard', 
+                                name: 'Guest', 
+                                phone: '1234567890', 
+                                totalRent: listing.price 
+                            });
+                        }}
                         className="w-full btn-primary py-5 text-xl shadow-2xl shadow-brand/40 mb-6"
                     >
                         Reserve Now

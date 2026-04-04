@@ -65,10 +65,10 @@ export default function Payment(): React.ReactElement {
     setIsProcessing(true);
     
     try {
-      const booking = await fetchApi<{ id: string }>('/api/bookings', {
+      const booking = await fetchApi<{ id: number }>('/api/bookings', {
         method: 'POST',
         body: JSON.stringify({
-          property_id: listing.id,
+          property_id: parseInt(listing.id),
           user_name: bookingDetails.name,
           user_phone: bookingDetails.phone,
           start_date: bookingDetails.moveInDate,
@@ -80,7 +80,7 @@ export default function Payment(): React.ReactElement {
       const { url } = await fetchApi<{ url: string }>('/api/create-checkout-session', {
         method: 'POST',
         body: JSON.stringify({
-          property_id: listing.id,
+          property_id: parseInt(listing.id),
           title: listing.title,
           user_name: bookingDetails.name,
           total_price: bookingDetails.totalRent,

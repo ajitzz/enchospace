@@ -57,7 +57,7 @@ export interface Listing {
 }
 
 export interface Reservation {
-  id: string;
+  id: number;
   property_id: number;
   user_name: string;
   user_phone: string;

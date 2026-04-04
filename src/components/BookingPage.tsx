@@ -7,6 +7,7 @@ interface BookingPageProps {
   listing: Listing;
   bookingDetails: {
     moveInDate: string;
+    moveOutDate: string;
     configuration: string;
     name: string;
     phone: string;

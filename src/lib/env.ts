@@ -21,13 +21,21 @@ export type Env = z.infer<typeof envSchema>;
 let env: Env;
 
 export function validateEnv(): Env {
-  const result = envSchema.safeParse(process.env);
-  if (!result.success) {
-    console.error("❌ Invalid environment variables:", result.error.format());
-    throw new Error("Invalid environment variables");
+  try {
+    const result = envSchema.safeParse(process.env);
+    if (!result.success) {
+      const errors = result.error.flatten().fieldErrors;
+      const missingVars = Object.keys(errors).join(", ");
+      console.error("❌ Invalid environment variables. Missing or invalid:", missingVars);
+      console.error("Details:", JSON.stringify(errors, null, 2));
+      throw new Error(`Invalid environment variables: ${missingVars}`);
+    }
+    env = result.data;
+    return env;
+  } catch (error) {
+    console.error("Critical failure during environment validation:", error);
+    process.exit(1);
   }
-  env = result.data;
-  return env;
 }
 
 export function getEnv(): Env {

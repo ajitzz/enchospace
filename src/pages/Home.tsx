@@ -21,6 +21,7 @@ type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
 
 interface BookingData {
     moveInDate: string;
+    moveOutDate: string;
     configuration: string;
     name: string;
     phone: string;

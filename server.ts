@@ -112,7 +112,7 @@ app.post("/api/webhook/stripe", express.raw({ type: 'application/json' }), async
       if (bookingId) {
         await dbQuery(
           "UPDATE bookings SET status = 'confirmed' WHERE id = $1 RETURNING *",
-          [bookingId]
+          [parseInt(bookingId)]
         );
         logger.info(`Booking ${bookingId} confirmed via Stripe webhook.`);
       }
@@ -131,6 +131,11 @@ app.use(express.json());
 // Initialize DB tables
 async function initDB() {
   try {
+    // Test connection
+    const client = await pool.connect();
+    client.release();
+    logger.info("Database connection successful.");
+
     await dbQuery(`
       CREATE TABLE IF NOT EXISTS properties (
         id SERIAL PRIMARY KEY,
