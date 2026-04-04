@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Listing } from '../types';
 import { 
-    Heart, Share2, MapPin, Star, Shield, Clock, Info, 
-    CheckCircle2, Music, FileText, Video, ChevronLeft, 
-    ChevronRight, Play, Maximize2, Users, Bed, Bath, 
+    Heart, Share2, MapPin, Star, Shield, 
+    CheckCircle2, Music, FileText, ChevronLeft, 
+    ChevronRight, Maximize2, Users, Bed, Bath, 
     Wifi, Coffee, Car, Wind, Tv, Waves
 } from 'lucide-react';
 
@@ -15,10 +15,16 @@ interface Props {
   onListingClick: (listing: Listing) => void;
   isFavorite: boolean;
   onToggleFavorite: (listing: Listing) => void;
-  onBook: (data: any) => void;
+  onBook: (data: {
+    moveInDate: string;
+    configuration: string;
+    name: string;
+    phone: string;
+    totalRent: number;
+  }) => void;
 }
 
-export default function ListingDetails({ listing, onBack, isFavorite, onToggleFavorite, onBook }: Props) {
+export default function ListingDetails({ listing, onBack, isFavorite, onToggleFavorite, onBook }: Props): React.ReactElement {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const images = listing.images || [listing.imageUrl];
 
@@ -29,7 +35,7 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
   const isAudio = (url: string) => url.match(/\.(mp3|wav|ogg)$/i) != null || url.includes('audio');
   const isDoc = (url: string) => url.match(/\.(pdf|doc|docx)$/i) != null;
 
-  const amenityIcons: Record<string, any> = {
+  const amenityIcons: Record<string, React.ElementType> = {
     'Wifi': Wifi,
     'Kitchen': Coffee,
     'Free parking': Car,
@@ -44,7 +50,7 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
       {/* Hero Section */}
       <div className="relative h-[70vh] w-full overflow-hidden bg-black">
         <AnimatePresence mode="wait">
-          {isVideo(images[activeImageIndex]) ? (
+          {isVideo(images[activeImageIndex] || '') ? (
             <motion.video
               key={activeImageIndex}
               src={images[activeImageIndex]}
@@ -57,7 +63,7 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
               exit={{ opacity: 0 }}
               className="absolute inset-0 w-full h-full object-cover opacity-80"
             />
-          ) : isAudio(images[activeImageIndex]) ? (
+          ) : isAudio(images[activeImageIndex] || '') ? (
             <motion.div
               key={activeImageIndex}
               initial={{ opacity: 0 }}
@@ -68,7 +74,7 @@ export default function ListingDetails({ listing, onBack, isFavorite, onToggleFa
               <Music className="w-24 h-24 text-brand mb-4" />
               <audio src={images[activeImageIndex]} controls className="w-64" />
             </motion.div>
-          ) : isDoc(images[activeImageIndex]) ? (
+          ) : isDoc(images[activeImageIndex] || '') ? (
             <motion.div
               key={activeImageIndex}
               initial={{ opacity: 0 }}

@@ -15,7 +15,7 @@ const CATEGORIES = [
   { id: 'castles', label: 'Castles', icon: Castle },
 ];
 
-export default function FilterBar() {
+export default function FilterBar(): React.ReactElement {
   const [activeCategory, setActiveCategory] = React.useState('apartments');
 
   return (

@@ -9,6 +9,9 @@ import {
 import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
+import { User } from '@supabase/supabase-js';
+
+import DOMPurify from 'dompurify';
 
 const AMENITIES_LIST = [
   { id: 'wifi', label: 'Fast WiFi', icon: Wifi },
@@ -27,9 +30,9 @@ const PROPERTY_TYPES = [
   { id: 'Unique Space', label: 'Unique Space', icon: Sparkles },
 ];
 
-export default function HostSpace() {
+export default function HostSpace(): React.ReactElement {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -63,28 +66,55 @@ export default function HostSpace() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Security: Client-side validation
+    const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'application/pdf'];
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+    const validFiles = Array.from(files).filter(file => {
+      if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+        alert(`File type ${file.type} is not allowed.`);
+        return false;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File ${file.name} exceeds 10MB limit.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
+
     setUploadingFiles(true);
     try {
-      const uploadPromises = Array.from(files).map(async (file: File) => {
-        const { uploadUrl, fileUrl } = await fetchApi('/api/upload-url', {
+      const uploadPromises = validFiles.map(async (file: File) => {
+        const { uploadUrl, fileUrl } = await fetchApi<any>('/api/upload-url', {
           method: 'POST',
-          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+          body: JSON.stringify({ 
+            fileName: file.name, 
+            fileType: file.type,
+            fileSize: file.size 
+          }),
         });
 
-        await fetch(uploadUrl, {
+        const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type },
           body: file,
         });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
 
         return fileUrl;
       });
 
       const uploadedUrls = await Promise.all(uploadPromises);
       setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error('Upload failed:', error);
-      alert(error.message || 'Failed to upload some files. Please try again.');
+      alert(message || 'Failed to upload some files. Please try again.');
     } finally {
       setUploadingFiles(false);
     }
@@ -107,15 +137,19 @@ export default function HostSpace() {
   };
 
   const handleSubmit = async () => {
+    if (!isStepValid()) return;
     setIsSubmitting(true);
     try {
+      // Sanitize description
+      const sanitizedDescription = DOMPurify.sanitize(formData.description);
+
       await fetchApi('/api/properties', {
         method: 'POST',
         body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
+          title: formData.title.trim(),
+          description: sanitizedDescription,
           price: parseFloat(formData.price),
-          location: formData.location,
+          location: formData.location.trim(),
           images: formData.images.length > 0 ? formData.images : ['https://picsum.photos/seed/property/800/600'],
           details: {
             propertyType: formData.propertyType,
@@ -129,9 +163,10 @@ export default function HostSpace() {
       });
       setSuccess(true);
       setTimeout(() => navigate('/'), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error('Failed to host space', error);
-      alert(error.message || 'Failed to host space. Please try again.');
+      alert(message || 'Failed to host space. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -257,14 +292,14 @@ export default function HostSpace() {
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">{item.label}</label>
                                 <div className="flex items-center justify-between bg-gray-50 border-2 border-gray-100 rounded-2xl p-2">
                                     <button 
-                                        onClick={() => setFormData(prev => ({ ...prev, [item.key]: Math.max(1, (prev as any)[item.key] - 1) }))}
+                                        onClick={() => setFormData(prev => ({ ...prev, [item.key]: Math.max(1, (prev[item.key as keyof typeof prev] as number) - 1) }))}
                                         className="p-2 hover:bg-white rounded-xl transition-colors text-gray-400 hover:text-brand"
                                     >
                                         <Minus className="w-4 h-4" />
                                     </button>
-                                    <span className="font-bold text-lg">{(formData as any)[item.key]}</span>
+                                    <span className="font-bold text-lg">{formData[item.key as keyof typeof formData]}</span>
                                     <button 
-                                        onClick={() => setFormData(prev => ({ ...prev, [item.key]: (prev as any)[item.key] + 1 }))}
+                                        onClick={() => setFormData(prev => ({ ...prev, [item.key]: (prev[item.key as keyof typeof prev] as number) + 1 }))}
                                         className="p-2 hover:bg-white rounded-xl transition-colors text-gray-400 hover:text-brand"
                                     >
                                         <Plus className="w-4 h-4" />

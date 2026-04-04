@@ -9,7 +9,7 @@ interface Props {
   className?: string;
 }
 
-export default function MapSidebar({ listings, highlightedId, className }: Props) {
+export default function MapSidebar({ listings, highlightedId, className }: Props): React.ReactElement {
   return (
     <div className={`relative bg-gray-900 flex items-center justify-center rounded-[2.5rem] overflow-hidden shadow-2xl ${className || ''}`}>
       {/* High-tech Grid Background */}

@@ -11,10 +11,10 @@ import WishlistPage from '../components/WishlistPage';
 import BookingPage from '../components/BookingPage';
 import ReservationsPage from '../components/ReservationsPage';
 import FlyToAnimation from '../components/FlyToAnimation';
-import { MapIcon, ListIcon } from '../components/Icons';
 import { fetchListingsForCity } from '../services/geminiService';
 import { fetchApi } from '../lib/api';
-import { Listing, Room, NearbyPoint } from '../types';
+import { logger } from '../lib/logger';
+import { Listing, Reservation } from '../types';
 import { Sparkles, Map as MapIconLucide, LayoutGrid } from 'lucide-react';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
@@ -27,18 +27,12 @@ interface BookingData {
     totalRent: number;
 }
 
-interface Reservation extends BookingData {
-    id: string;
-    listing: Listing;
-    bookingDate: string;
-}
-
 interface FlyAnimationState {
     listing: Listing;
     target: 'RESERVES' | 'WISHLIST';
 }
 
-export default function Home() {
+export default function Home(): React.ReactElement {
   const navigate = useNavigate();
   const [city, setCity] = useState('Berlin');
   const [listings, setListings] = useState<Listing[]>([]);
@@ -59,7 +53,18 @@ export default function Home() {
 
   useEffect(() => {
     handleSearch('Berlin');
+    fetchReservations();
   }, []);
+
+  const fetchReservations = async () => {
+    try {
+      const data = await fetchApi<Reservation[]>('/api/admin/bookings'); // For now, just fetch all for demo
+      setReservations(data);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("Failed to fetch reservations", { error: message });
+    }
+  };
 
   const handleSearch = async (searchCity: string) => {
     setLoading(true);
@@ -68,16 +73,16 @@ export default function Home() {
     setSelectedListing(null);
     try {
         // Fetch from DB
-        let dbListings = [];
+        let dbListings: Listing[] = [];
         try {
-            const dbData = await fetchApi('/api/properties');
-            dbListings = dbData.map((p: any) => ({
+            const dbData = await fetchApi<any[]>('/api/properties');
+            dbListings = dbData.map((p) => ({
                 id: p.id.toString(),
                 title: p.title,
-                price: p.price,
+                price: parseFloat(p.price),
                 currency: '$',
                 period: 'night',
-                type: p.details?.propertyType?.toUpperCase() || 'APARTMENT',
+                type: (p.details?.propertyType?.toUpperCase() as Listing['type']) || 'APARTMENT',
                 imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
                 images: p.images || [],
                 imageCount: p.images?.length || 1,
@@ -92,22 +97,24 @@ export default function Home() {
                 description: p.description,
                 details: p.details || {},
             }));
-        } catch (dbErr) {
-            console.warn("Failed to fetch properties from DB, falling back to Gemini only", dbErr);
+        } catch (dbErr: unknown) {
+            const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+            logger.warn("Failed to fetch properties from DB, falling back to Gemini only", { error: message });
         }
 
         // Fetch from Gemini
         const data = await fetchListingsForCity(searchCity);
         setListings([...dbListings, ...data]);
-    } catch (e) {
-        console.error("Failed to load listings", e);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        logger.error("Failed to load listings", { error: message });
     } finally {
         setTimeout(() => setLoading(false), 800); // Artificial delay for smooth transition
     }
   };
 
   const toggleFavorite = (listing: Listing) => {
-      setFavorites(prev => {
+      setFavorites((prev: Listing[]) => {
           const exists = prev.find(l => l.id === listing.id);
           if (exists) {
               return prev.filter(l => l.id !== listing.id);
@@ -121,7 +128,13 @@ export default function Home() {
 
   const isFavorite = (id: string) => !!favorites.find(l => l.id === id);
 
-  const handleListingClick = (listing: Listing) => {
+  const handleListingClick = (listingOrId: Listing | string) => {
+    const listing = typeof listingOrId === 'string' 
+        ? listings.find(l => l.id === listingOrId) 
+        : listingOrId;
+        
+    if (!listing) return;
+
     const detailedListing: Listing = {
         ...listing,
         description: listing.description || `Welcome to this stunning ${listing.type.toLowerCase()} in the heart of ${city}. This property offers a perfect blend of modern comfort and classic charm. High ceilings, large windows, and a spacious layout make this the ideal home for professionals or students.`,
@@ -148,6 +161,7 @@ export default function Home() {
 
   const handleBooking = (data: BookingData) => {
       if (!selectedListing) return;
+      setLastBooking(data);
       navigate('/payment', { state: { listing: selectedListing, bookingDetails: data } });
   };
 

@@ -15,7 +15,7 @@ interface BookingPageProps {
   onBackToHome: () => void;
 }
 
-const BookingPage: React.FC<BookingPageProps> = ({ listing, bookingDetails, onBackToHome }) => {
+const BookingPage = ({ listing, bookingDetails, onBackToHome }: BookingPageProps): React.ReactElement => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center animate-fade-in-up font-sans">
       

@@ -1,19 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { Shield, Trash2, Edit, Plus, Users, Home, CreditCard, TrendingUp, Calendar, MapPin, DollarSign, Activity, Search as SearchIcon, Phone as PhoneIcon, LayoutDashboard, Settings, LogOut, BarChart3, Layers, Zap, Sparkles, Globe } from 'lucide-react';
+import { Shield, Trash2, Edit, Plus, Users, Home, TrendingUp, Calendar, MapPin, DollarSign, Activity, Search as SearchIcon, Phone as PhoneIcon, LayoutDashboard, Settings, LogOut, BarChart3, Layers, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function Admin() {
+import { Listing } from '../types';
+import { logger } from '../lib/logger';
+
+interface AdminStats {
+  totalProperties: number;
+  totalBookings: number;
+  totalRevenue: number;
+}
+
+interface AdminBooking {
+  id: number;
+  property_id: number;
+  property_title: string;
+  user_name: string;
+  user_phone: string;
+  start_date: string;
+  end_date: string;
+  total_price: number;
+  status: string;
+  created_at: string;
+}
+
+interface AdminUser {
+  user_name: string;
+  user_phone: string;
+  created_at: string;
+}
+
+export default function Admin(): React.ReactElement {
   const navigate = useNavigate();
-  const [properties, setProperties] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [stats, setStats] = useState({ totalProperties: 0, totalBookings: 0, totalRevenue: 0 });
+  const [properties, setProperties] = useState<Listing[]>([]);
+  const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [stats, setStats] = useState<AdminStats>({ totalProperties: 0, totalBookings: 0, totalRevenue: 0 });
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -22,32 +49,58 @@ export default function Admin() {
     setLoading(true);
     try {
       const [propsData, statsData, bookingsData, usersData] = await Promise.all([
-        fetchApi('/api/properties'),
-        fetchApi('/api/admin/stats'),
-        fetchApi('/api/admin/bookings'),
-        fetchApi('/api/admin/users')
+        fetchApi<any[]>('/api/properties'),
+        fetchApi<AdminStats>('/api/admin/stats'),
+        fetchApi<AdminBooking[]>('/api/admin/bookings'),
+        fetchApi<AdminUser[]>('/api/admin/users')
       ]);
-      setProperties(propsData || []);
-      setStats(statsData || { totalProperties: 0, totalBookings: 0, totalRevenue: 0 });
-      setBookings(bookingsData || []);
-      setUsers(usersData || []);
-    } catch (err: any) {
-      console.error('Admin data fetch failed:', err);
+
+      const mappedProps: Listing[] = propsData.map((p) => ({
+        id: p.id.toString(),
+        title: p.title,
+        price: parseFloat(p.price),
+        currency: '$',
+        period: 'night',
+        type: (p.details?.propertyType?.toUpperCase() as Listing['type']) || 'APARTMENT',
+        imageUrl: p.images?.[0] || `https://picsum.photos/seed/${p.id}/800/600`,
+        images: p.images || [],
+        imageCount: p.images?.length || 1,
+        provider: 'Host',
+        isVerified: true,
+        location: p.location || 'Unknown',
+        discount: 0,
+        rating: 5.0,
+        reviewCount: 0,
+        amenities: p.details?.amenities || ['Wifi', 'Kitchen'],
+        address: p.location || 'Unknown',
+        description: p.description,
+        details: p.details || {},
+        status: p.status || 'active',
+      }));
+
+      setProperties(mappedProps);
+      setStats(statsData);
+      setBookings(bookingsData);
+      setUsers(usersData);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Admin data fetch failed:', { error: message });
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteProperty = async (id: number) => {
+  const deleteProperty = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this property?')) return;
     
     try {
       await fetchApi(`/api/properties/${id}`, { method: 'DELETE' });
-      setProperties(prev => prev.filter((p: any) => p.id !== id));
+      setProperties(prev => prev.filter((p) => p.id !== id));
       setStats(prev => ({ ...prev, totalProperties: Math.max(0, prev.totalProperties - 1) }));
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Error deleting property');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Error deleting property:', { error: message });
+      alert(message || 'Error deleting property');
     }
   };
 
@@ -57,10 +110,11 @@ export default function Admin() {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
-      setBookings(prev => prev.map((b: any) => b.id === id ? { ...b, status } : b));
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Error updating booking');
+      setBookings(prev => prev.map((b) => b.id === id ? { ...b, status } : b));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('Error updating booking status:', { error: message });
+      alert(message || 'Error updating booking');
     }
   };
 
@@ -68,32 +122,38 @@ export default function Admin() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate('/');
-      } else {
-        setUser(session.user);
       }
     });
 
     fetchData();
   }, [navigate]);
 
-  const filteredBookings = bookings.filter((b: any) => {
+  const filteredBookings = bookings.filter((b) => {
     const matchesStatus = filterStatus === 'all' || b.status === filterStatus;
     const matchesSearch = b.user_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          b.property_title.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
-  const filteredUsers = users.filter((u: any) => 
+  const filteredUsers = users.filter((u) => 
     u.user_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.user_phone.includes(searchTerm)
   );
 
-  const filteredProperties = properties.filter((p: any) => 
+  const filteredProperties = properties.filter((p) => 
     p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.location.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.location || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const StatCard = ({ title, value, icon: Icon, trend, color = "brand" }: any) => (
+  interface StatCardProps {
+    title: string;
+    value: string | number;
+    icon: React.ElementType;
+    trend?: string;
+    color?: string;
+  }
+
+  const StatCard = ({ title, value, icon: Icon, trend, color = "brand" }: StatCardProps) => (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -279,7 +339,7 @@ export default function Admin() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredProperties.map((prop: any) => (
+                          {filteredProperties.map((prop) => (
                             <tr key={prop.id} className="border-b-2 border-gray-50 hover:bg-gray-50/30 transition-colors group">
                               <td className="py-8 px-10">
                                 <div className="flex items-center gap-6">
@@ -306,7 +366,7 @@ export default function Admin() {
                               <td className="py-8 px-10">
                                 <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${prop.status === 'available' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-yellow-50 text-yellow-600 border border-yellow-100'}`}>
                                   <span className={`w-1.5 h-1.5 rounded-full mr-2 ${prop.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
-                                  {prop.status}
+                                  {prop.status || 'available'}
                                 </span>
                               </td>
                               <td className="py-8 px-10 text-right">
@@ -399,7 +459,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredBookings.map((booking: any) => (
+                        {filteredBookings.map((booking) => (
                           <tr key={booking.id} className="border-b-2 border-gray-50 hover:bg-gray-50/30 transition-colors">
                             <td className="py-8 px-10">
                               <div className="font-black text-gray-900 uppercase tracking-tight">{booking.user_name}</div>
@@ -486,7 +546,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredUsers.map((u: any, i: number) => (
+                        {filteredUsers.map((u, i) => (
                           <tr key={i} className="border-b-2 border-gray-50 hover:bg-gray-50/30 transition-colors group">
                             <td className="py-8 px-10">
                               <div className="flex items-center gap-4">

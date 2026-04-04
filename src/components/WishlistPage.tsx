@@ -9,7 +9,7 @@ interface Props {
   onToggleFavorite: (listing: Listing) => void;
 }
 
-export default function WishlistPage({ favorites, onBack, onListingClick, onToggleFavorite }: Props) {
+export default function WishlistPage({ favorites, onBack, onListingClick, onToggleFavorite }: Props): React.ReactElement {
   return (
     <div className="max-w-7xl mx-auto p-6 mt-8">
       <button onClick={onBack} className="mb-6 text-blue-600 hover:underline font-medium">&larr; Back to Search</button>

@@ -36,7 +36,14 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  details?: any;
+  details?: {
+    propertyType?: string;
+    bedrooms?: number;
+    bathrooms?: number;
+    maxGuests?: number;
+    amenities?: string[];
+    [key: string]: any;
+  };
   
   // Detailed fields
   description?: string;
@@ -46,6 +53,20 @@ export interface Listing {
   rooms?: Room[];
   nearby?: NearbyPoint[];
   maxGuests?: number;
+  status?: string;
+}
+
+export interface Reservation {
+  id: string;
+  property_id: number;
+  user_name: string;
+  user_phone: string;
+  start_date: string;
+  end_date: string;
+  total_price: number;
+  status: string;
+  created_at: string;
+  property_title?: string;
 }
 
 export interface SearchState {

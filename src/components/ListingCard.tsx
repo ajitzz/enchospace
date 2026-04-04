@@ -11,7 +11,7 @@ interface Props {
   onToggleFavorite: (listing: Listing) => void;
 }
 
-export const ListingCard: React.FC<Props> = ({ listing, onHover, onClick, isFavorite, onToggleFavorite }) => {
+export const ListingCard = ({ listing, onHover, onClick, isFavorite, onToggleFavorite }: Props): React.ReactElement => {
   const isImage = listing.imageUrl.match(/\.(jpeg|jpg|gif|png|svg)$/i) != null || listing.imageUrl.includes('image');
   const isVideo = listing.imageUrl.match(/\.(mp4|webm|ogg)$/i) != null || listing.imageUrl.includes('video');
   const isAudio = listing.imageUrl.match(/\.(mp3|wav|ogg)$/i) != null || listing.imageUrl.includes('audio');
@@ -58,7 +58,7 @@ export const ListingCard: React.FC<Props> = ({ listing, onHover, onClick, isFavo
                     Verified
                 </div>
             )}
-            {listing.discount > 0 && (
+            {listing.discount !== undefined && listing.discount > 0 && (
                 <div className="bg-brand text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20">
                     -{listing.discount}% OFF
                 </div>

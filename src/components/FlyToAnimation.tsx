@@ -7,7 +7,7 @@ interface Props {
   onComplete: (target: 'RESERVES' | 'WISHLIST') => void;
 }
 
-export default function FlyToAnimation({ target, onComplete }: Props) {
+export default function FlyToAnimation({ target, onComplete }: Props): React.ReactElement {
   useEffect(() => {
     const timer = setTimeout(() => {
       onComplete(target);

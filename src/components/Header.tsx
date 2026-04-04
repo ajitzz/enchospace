@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import { User } from '@supabase/supabase-js';
 import { 
     SearchIcon, HeartIcon, UserIcon, MenuIcon, CalendarIcon, 
-    NavigationIcon, MapIcon, XIcon, PhoneIcon, MailIcon, 
-    HouseIcon, LogInIcon 
+    NavigationIcon, MapIcon, XIcon, LogInIcon 
 } from './Icons';
 
 interface HeaderProps {
@@ -22,7 +22,7 @@ interface HeaderProps {
 
 const POPULAR_CITIES = ['Berlin', 'London', 'Paris', 'New York', 'Tokyo', 'Barcelona', 'Amsterdam', 'Munich'];
 
-const Header: React.FC<HeaderProps> = ({ 
+const Header = ({ 
     onSearch, 
     currentCity, 
     onWishlistClick, 
@@ -31,14 +31,14 @@ const Header: React.FC<HeaderProps> = ({
     highlightWishlist,
     reservesCount,
     wishlistCount
-}) => {
+}: HeaderProps): React.ReactElement => {
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState(currentCity);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   
   const searchRef = useRef<HTMLFormElement>(null);
   const desktopMenuRef = useRef<HTMLDivElement>(null);

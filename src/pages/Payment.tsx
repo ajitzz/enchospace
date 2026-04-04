@@ -1,19 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { fetchApi } from '../lib/api';
 import { CreditCard, Lock, CheckCircle, ArrowLeft, Sparkles, ShieldCheck, Zap, Globe } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { Listing } from '../types';
+import { logger } from '../lib/logger';
 
-export default function Payment() {
+interface PaymentState {
+  listing: Listing;
+  bookingDetails: {
+    name: string;
+    phone: string;
+    moveInDate: string;
+    moveOutDate: string;
+    totalRent: number;
+    configuration: string;
+  };
+}
+
+export default function Payment(): React.ReactElement {
   const location = useLocation();
   const navigate = useNavigate();
-  const { listing, bookingDetails } = location.state || {};
+  const state = location.state as PaymentState | null;
+  const { listing, bookingDetails } = state || {};
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Check if we returned from Stripe checkout
     const query = new URLSearchParams(window.location.search);
     if (query.get('success')) {
@@ -21,7 +36,7 @@ export default function Payment() {
       setTimeout(() => navigate('/'), 4000);
     }
     if (query.get('canceled')) {
-      alert('Payment was canceled.');
+      logger.info('Payment was canceled by user');
     }
   }, [navigate]);
 
@@ -50,7 +65,7 @@ export default function Payment() {
     setIsProcessing(true);
     
     try {
-      const booking = await fetchApi('/api/bookings', {
+      const booking = await fetchApi<{ id: string }>('/api/bookings', {
         method: 'POST',
         body: JSON.stringify({
           property_id: listing.id,
@@ -62,7 +77,7 @@ export default function Payment() {
         }),
       });
 
-      const { url } = await fetchApi('/api/create-checkout-session', {
+      const { url } = await fetchApi<{ url: string }>('/api/create-checkout-session', {
         method: 'POST',
         body: JSON.stringify({
           property_id: listing.id,
@@ -76,9 +91,10 @@ export default function Payment() {
       if (url) {
         window.location.href = url;
       }
-    } catch (err: any) {
-      console.error('Payment failed', err);
-      alert(err.message || 'Failed to initiate payment. Please try again.');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      logger.error('Payment failed', { error: errorMessage });
+      alert(errorMessage || 'Failed to initiate payment. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -206,7 +222,7 @@ export default function Payment() {
               
               <div className="flex gap-6 mb-10 pb-10 border-b-2 border-gray-200/50">
                 <div className="relative group">
-                    <img src={listing.images[0]} alt={listing.title} className="w-32 h-32 object-cover rounded-[2rem] shadow-lg group-hover:scale-105 transition-transform duration-500" />
+                    <img src={listing.images && listing.images[0] ? listing.images[0] : listing.imageUrl} alt={listing.title} className="w-32 h-32 object-cover rounded-[2rem] shadow-lg group-hover:scale-105 transition-transform duration-500" />
                     <div className="absolute inset-0 rounded-[2rem] ring-1 ring-inset ring-black/10" />
                 </div>
                 <div className="flex flex-col justify-center">
