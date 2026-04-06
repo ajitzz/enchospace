@@ -57,7 +57,7 @@ const PORT = 3000;
 // Explicit CORS whitelist
 app.use(cors({
   origin: (origin, callback) => {
-    const whitelist = env.FRONTEND_URLS.split(',');
+    const whitelist = env.FRONTEND_URLS.split(',').map(url => url.trim());
     if (!origin || whitelist.includes(origin)) {
       callback(null, true);
     } else {
@@ -168,6 +168,7 @@ async function initDB() {
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     logger.error("Failed to initialize DB tables:", { error: errorMessage });
+    throw e;
   }
 }
 
@@ -179,10 +180,19 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
+  let dbStatus = "disconnected";
+  try {
+    if (pool) {
+      await pool.query("SELECT 1");
+      dbStatus = "connected";
+    }
+  } catch (e) {
+    dbStatus = "error";
+  }
   res.json({ 
     status: "ok",
-    database: pool ? "connected" : "disconnected",
+    database: dbStatus,
     redis: env.UPSTASH_REDIS_URL ? "configured" : "not configured",
     s3: env.AWS_S3_BUCKET_NAME ? "configured" : "not configured",
     stripe: env.STRIPE_SECRET_KEY ? "configured" : "not configured",
@@ -250,6 +260,28 @@ app.post("/api/upload-url", async (req, res) => {
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
+
+// Auth Middleware for Admin Routes
+const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  } catch (e) {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
+app.use("/api/admin", requireAuth);
 
 app.get("/api/admin/stats", async (req, res) => {
   try {
@@ -322,16 +354,22 @@ app.patch("/api/admin/bookings/:id", validateRequest(z.object({ status: bookingS
   }
 });
 
+// Global Redis Client
+let redisClient: any = null;
+if (env.UPSTASH_REDIS_URL) {
+  import("ioredis").then(({ Redis }) => {
+    redisClient = new Redis(env.UPSTASH_REDIS_URL);
+  }).catch(e => {
+    logger.error("Failed to initialize Redis client:", { error: String(e) });
+  });
+}
+
 app.get("/api/properties", async (req, res) => {
   try {
     // Try to get from Redis cache first
-    let redis = null;
-    
-    if (env.UPSTASH_REDIS_URL) {
+    if (redisClient) {
       try {
-        const { Redis } = await import("ioredis");
-        redis = new Redis(env.UPSTASH_REDIS_URL);
-        const cached = await redis.get("properties:all");
+        const cached = await redisClient.get("properties:all");
         if (cached) {
           logger.info("Serving properties from cache");
           return res.json(JSON.parse(cached));
@@ -345,9 +383,9 @@ app.get("/api/properties", async (req, res) => {
     const result = await dbQuery("SELECT * FROM properties ORDER BY created_at DESC");
     
     // Cache the result in Redis for 5 minutes (atomic SET EX)
-    if (redis) {
+    if (redisClient) {
       try {
-        await redis.set("properties:all", JSON.stringify(result.rows), "EX", 300);
+        await redisClient.set("properties:all", JSON.stringify(result.rows), "EX", 300);
       } catch (redisError: unknown) {
         const errorMessage = redisError instanceof Error ? redisError.message : String(redisError);
         logger.warn("Redis set error:", { error: errorMessage });
@@ -371,11 +409,9 @@ app.post("/api/properties", validateRequest(propertySchema), async (req, res) =>
     );
     
     // Invalidate cache
-    if (env.UPSTASH_REDIS_URL) {
+    if (redisClient) {
       try {
-        const { Redis } = await import("ioredis");
-        const redis = new Redis(env.UPSTASH_REDIS_URL);
-        await redis.del("properties:all");
+        await redisClient.del("properties:all");
       } catch (redisError: unknown) {
         const errorMessage = redisError instanceof Error ? redisError.message : String(redisError);
         logger.warn("Redis cache invalidation failed:", { error: errorMessage });
@@ -390,7 +426,7 @@ app.post("/api/properties", validateRequest(propertySchema), async (req, res) =>
   }
 });
 
-app.delete("/api/properties/:id", async (req, res) => {
+app.delete("/api/properties/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     await Promise.all([
@@ -399,11 +435,9 @@ app.delete("/api/properties/:id", async (req, res) => {
     ]);
     
     // Invalidate cache
-    if (env.UPSTASH_REDIS_URL) {
+    if (redisClient) {
       try {
-        const { Redis } = await import("ioredis");
-        const redis = new Redis(env.UPSTASH_REDIS_URL);
-        await redis.del("properties:all");
+        await redisClient.del("properties:all");
       } catch (redisError: unknown) {
         const errorMessage = redisError instanceof Error ? redisError.message : String(redisError);
         logger.warn("Redis del error:", { error: errorMessage });
@@ -431,6 +465,12 @@ app.post("/api/create-checkout-session", validateRequest(paymentSchema), async (
     const Stripe = (await import("stripe")).default;
     const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" as any });
 
+    let origin = req.headers.origin;
+    const whitelist = env.FRONTEND_URLS.split(',').map(url => url.trim());
+    if (!origin || !whitelist.includes(origin)) {
+      origin = whitelist[0];
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -447,8 +487,8 @@ app.post("/api/create-checkout-session", validateRequest(paymentSchema), async (
         },
       ],
       mode: "payment",
-      success_url: `${req.headers.origin}/payment?success=true&property_id=${property_id}`,
-      cancel_url: `${req.headers.origin}/payment?canceled=true`,
+      success_url: `${origin}/payment?success=true&property_id=${property_id}`,
+      cancel_url: `${origin}/payment?canceled=true`,
       metadata: {
         booking_id: booking_id || null,
       }
@@ -465,6 +505,19 @@ app.post("/api/create-checkout-session", validateRequest(paymentSchema), async (
 app.post("/api/bookings", validateRequest(bookingSchema), async (req, res) => {
   const { property_id, user_name, user_phone, start_date, end_date, total_price } = req.body;
   try {
+    // Check for overlapping reservations
+    const overlapCheck = await dbQuery(
+      `SELECT id FROM bookings 
+       WHERE property_id = $1 
+       AND status = 'confirmed'
+       AND (start_date < $3 AND end_date > $2)`,
+      [property_id, start_date, end_date]
+    );
+
+    if (overlapCheck.rowCount && overlapCheck.rowCount > 0) {
+      return res.status(409).json({ error: "Property is already booked for these dates" });
+    }
+
     const result = await dbQuery(
       "INSERT INTO bookings (property_id, user_name, user_phone, start_date, end_date, total_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
       [property_id, user_name, user_phone, start_date, end_date, total_price]
@@ -523,7 +576,12 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 
 // Start Server
 async function startServer() {
-  await initDB();
+  try {
+    await initDB();
+  } catch (e) {
+    logger.error("Fatal error during database initialization. Exiting.");
+    process.exit(1);
+  }
   
   // API 404 Handler - MUST be after all API routes but BEFORE setupVite
   app.use("/api/*", (req, res) => {

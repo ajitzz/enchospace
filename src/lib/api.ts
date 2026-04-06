@@ -1,4 +1,5 @@
 import { ApiError } from "./types";
+import { supabase } from "./supabase";
 
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 5000;
@@ -21,12 +22,19 @@ export async function fetchApi<T>(
   retryCount = 0
 ): Promise<T> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...options.headers as Record<string, string>,
+    };
+    
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+
     const response = await fetchWithTimeout(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
