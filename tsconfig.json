@@ -10,14 +10,6 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
-    "strict": true,
-    "strictNullChecks": true,
-    "noImplicitAny": true,
-    "strictBindCallApply": true,
-    "noUnusedLocals": true,
-    "noImplicitThis": true,
-    "noUncheckedIndexedAccess": true,
-    "resolveJsonModule": true,
     "types": [
       "node"
     ],

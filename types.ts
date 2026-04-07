@@ -24,11 +24,9 @@ export interface Listing {
   period: string;
   type: 'APARTMENT' | 'ROOM' | 'STUDIO';
   imageUrl: string;
-  images?: string[];
   imageCount: number;
   provider: string;
   isVerified: boolean;
-  location?: string;
   discount?: number; // percentage
   isNew?: boolean;
   lat?: number; // For map simulation
@@ -36,14 +34,6 @@ export interface Listing {
   rating?: number;
   reviewCount?: number;
   amenities?: string[];
-  details?: {
-    propertyType?: string;
-    bedrooms?: number;
-    bathrooms?: number;
-    maxGuests?: number;
-    amenities?: string[];
-    [key: string]: any;
-  };
   
   // Detailed fields
   description?: string;
@@ -53,20 +43,6 @@ export interface Listing {
   rooms?: Room[];
   nearby?: NearbyPoint[];
   maxGuests?: number;
-  status?: string;
-}
-
-export interface Reservation {
-  id: number;
-  property_id: number;
-  user_name: string;
-  user_phone: string;
-  start_date: string;
-  end_date: string;
-  total_price: number;
-  status: string;
-  created_at: string;
-  property_title?: string;
 }
 
 export interface SearchState {
