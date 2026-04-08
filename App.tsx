@@ -9,6 +9,7 @@ import WishlistPage from './components/WishlistPage';
 import BookingPage from './components/BookingPage';
 import ReservationsPage from './components/ReservationsPage';
 import FlyToAnimation from './components/FlyToAnimation';
+import HostForm from './components/HostForm';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
 import { Listing, Room, NearbyPoint } from './types';
@@ -47,6 +48,7 @@ function App() {
   const [flyAnimation, setFlyAnimation] = useState<FlyAnimationState | null>(null);
   const [highlightReserves, setHighlightReserves] = useState(false);
   const [highlightWishlist, setHighlightWishlist] = useState(false);
+  const [showHostForm, setShowHostForm] = useState(false);
   
   const [lastBooking, setLastBooking] = useState<BookingData | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -62,8 +64,18 @@ function App() {
     setCurrentView('SEARCH');
     setSelectedListing(null);
     try {
-        const data = await fetchListingsForCity(searchCity);
-        setListings(data);
+        // Fetch from our new API first
+        const apiRes = await fetch(`/api/listings?city=${encodeURIComponent(searchCity)}`);
+        let apiListings: Listing[] = [];
+        if (apiRes.ok) {
+            apiListings = await apiRes.json();
+        }
+
+        // Fetch from Gemini as fallback/supplement
+        const geminiData = await fetchListingsForCity(searchCity);
+        
+        // Combine them
+        setListings([...apiListings, ...geminiData]);
     } catch (e) {
         console.error("Failed to load listings", e);
     } finally {
@@ -208,12 +220,23 @@ function App() {
         currentCity={city} 
         onWishlistClick={() => setCurrentView('WISHLIST')}
         onReservesClick={() => setCurrentView('RESERVATIONS')}
+        onHostClick={() => setShowHostForm(true)}
         highlightReserves={highlightReserves}
         highlightWishlist={highlightWishlist}
         reservesCount={reservations.length}
         wishlistCount={favorites.length}
       />
       <FilterBar />
+
+      {showHostForm && (
+        <HostForm 
+          onClose={() => setShowHostForm(false)} 
+          onSuccess={() => {
+            setShowHostForm(false);
+            handleSearch(city); // Refresh listings
+          }} 
+        />
+      )}
 
       <main className="max-w-[1920px] mx-auto pt-6 px-4 md:px-6 relative">
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] xl:hidden">
