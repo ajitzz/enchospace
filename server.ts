@@ -61,6 +61,11 @@ async function startServer() {
       await pool.query('SELECT 1');
       res.json({ status: 'ok' });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Tenant or user not found')) {
+        console.warn('Neon DB Warning: Tenant or user not found. Check your DATABASE_URL.');
+        return res.status(503).json({ status: 'error', message: 'Neon Database: Tenant or user not found. Please check your DATABASE_URL in settings.' });
+      }
       console.error('DB Health Check Failed:', error);
       res.status(500).json({ status: 'error', message: 'DB connection failed' });
     }
@@ -202,12 +207,14 @@ async function startServer() {
         );
       } catch (dbError) {
         const dbErrorMessage = dbError instanceof Error ? dbError.message : String(dbError);
-        console.error('Database Query Error:', dbErrorMessage);
+        
         // Handle Neon specific "Tenant or user not found" error
         if (dbErrorMessage.includes('Tenant or user not found')) {
-          console.warn('Neon Database: Tenant or user not found. Please check your DATABASE_URL.');
+          console.warn('Neon Database: Tenant or user not found. Falling back to AI-generated content.');
           return res.json([]); // Return empty array so frontend can use Gemini fallback
         }
+
+        console.error('Database Query Error:', dbErrorMessage);
         throw dbError; // Re-throw other DB errors to be caught by outer catch
       }
 
@@ -263,8 +270,27 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Proactive DB check
+    if (isDbConfigured) {
+      try {
+        await pool.query('SELECT 1');
+        console.log('✅ Database connection successful');
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('Tenant or user not found')) {
+          console.warn('⚠️  Neon Database Warning: "Tenant or user not found".');
+          console.warn('   This usually means your DATABASE_URL is incorrect or the project was deleted.');
+          console.warn('   The app will fallback to AI-generated content for now.');
+        } else {
+          console.error('❌ Database connection failed:', msg);
+        }
+      }
+    } else {
+      console.log('ℹ️  Database not configured. Using AI-generated content only.');
+    }
   });
 }
 
