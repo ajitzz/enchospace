@@ -1,11 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { Listing } from "../types";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let genAI: GoogleGenAI | null = null;
+
+const getGenAI = () => {
+  if (!genAI) {
+    const apiKey = process.env.API_KEY || '';
+    genAI = new GoogleGenAI({ apiKey });
+  }
+  return genAI;
+};
 
 export const fetchListingsForCity = async (city: string): Promise<Listing[]> => {
   try {
-    const model = "gemini-2.5-flash";
+    const ai = getGenAI();
+    const model = "gemini-2.0-flash"; // Using a more standard model alias
     const prompt = `Generate 8 high-quality rental listings for ${city}. 
     Use Google Maps to find real neighborhoods and realistic pricing.
     Include a mix of modern apartments and cozy rooms. 
@@ -19,7 +28,7 @@ export const fetchListingsForCity = async (city: string): Promise<Listing[]> => 
     The JSON objects must have these properties:
     id (string), title (string), price (number), currency (string), period (string), type (APARTMENT, ROOM, or STUDIO), provider (string), isVerified (boolean), discount (number), isNew (boolean), rating (number), reviewCount (number), amenities (array of strings), address (string).`;
 
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
       config: {

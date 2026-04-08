@@ -18,22 +18,22 @@ const __dirname = path.dirname(__filename);
 
 // Initialize DB (Neon)
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_4cbpQjKtym9n@ep-small-smoke-a1vjxk25-pooler.ap-southeast-1.aws.neon.tech/neondb',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
 // Initialize Redis (Upstash)
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || 'https://dummy-url.upstash.io',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'dummy-token',
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
 // Initialize S3
 const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'dummy',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'dummy',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
 });
 
@@ -87,8 +87,8 @@ async function startServer() {
         return res.status(400).json({ error: 'filename and contentType are required' });
       }
 
-      // If dummy credentials, just return a mock URL
-      if (process.env.AWS_ACCESS_KEY_ID === 'dummy' || !process.env.AWS_ACCESS_KEY_ID) {
+      // If no credentials, just return a mock URL
+      if (!process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID === 'dummy') {
         return res.json({
           uploadUrl: 'https://mock-s3-url.com/upload',
           fileUrl: `https://picsum.photos/seed/${Math.random()}/800/600`,
