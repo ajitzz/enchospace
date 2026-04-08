@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Listing } from '../types';
-import { ChevronLeft, CalendarIcon, ChevronRight, PhoneIcon, MessageCircleIcon } from './Icons';
+import { ChevronLeft, CalendarIcon, PhoneIcon, MessageCircleIcon } from './Icons';
 
 interface Reservation {
   id: string;

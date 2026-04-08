@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Listing } from '../types';
-import { StarIcon, HeartIcon } from './Icons';
+import { StarIcon } from './Icons';
 
 interface MapSidebarProps {
   listings: Listing[];

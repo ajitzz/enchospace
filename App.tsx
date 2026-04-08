@@ -12,7 +12,7 @@ import FlyToAnimation from './components/FlyToAnimation';
 import HostForm from './components/HostForm';
 import { MapIcon, ListIcon } from './components/Icons';
 import { fetchListingsForCity } from './services/geminiService';
-import { Listing, Room, NearbyPoint } from './types';
+import { Listing } from './types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
 

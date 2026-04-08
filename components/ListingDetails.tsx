@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Listing, NearbyPoint } from '../types';
-import { ChevronLeft, StarIcon, ShieldCheck, HeartIcon, MapIcon, ChevronRight, PhoneIcon, MessageCircleIcon, WifiIcon, GymIcon, TrainIcon, ShoppingBagIcon, TreeIcon, CoffeeIcon, ChevronDown, XIcon, CalendarIcon } from './Icons';
-import ListingCard from './ListingCard';
+import { ChevronLeft, StarIcon, ShieldCheck, HeartIcon, MapIcon, PhoneIcon, MessageCircleIcon, WifiIcon, GymIcon, TrainIcon, ShoppingBagIcon, TreeIcon, CoffeeIcon, ChevronDown, XIcon, CalendarIcon } from './Icons';
 
 interface ListingDetailsProps {
   listing: Listing;
@@ -10,7 +9,7 @@ interface ListingDetailsProps {
   similarListings: Listing[];
   isFavorite: boolean;
   onToggleFavorite: (listing: Listing) => void;
-  onBook?: (data: any) => void;
+  onBook?: (data: Record<string, unknown>) => void;
 }
 
 // Helper to map amenities to icons
@@ -162,8 +161,8 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
   const [bookingStep, setBookingStep] = useState<'AVAILABILITY' | 'CONTACT'>('AVAILABILITY');
   const [moveInDate, setMoveInDate] = useState(getFutureDate(0)); // Default to today
   const [config, setConfig] = useState('1 BHK Apartment');
-  const [minDate, setMinDate] = useState('');
-  
+  const [minDate] = useState(getFutureDate(0));
+
   // Default User Details (Simulated Login)
   const [guestName, setGuestName] = useState('Ajit');
   const [guestPhone, setGuestPhone] = useState('9995864396');
@@ -190,9 +189,6 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
 
   // Scroll listener for auto-hiding navbar
   useEffect(() => {
-    // Set min date to today
-    setMinDate(getFutureDate(0));
-
     const controlNavbar = () => {
       if (typeof window !== 'undefined') {
         const currentScrollY = window.scrollY;

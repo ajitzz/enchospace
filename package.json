@@ -8,9 +8,10 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server.js",
     "preview": "vite preview",
-    "lint": "echo 'No linting configured'",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "echo 'No tests configured'"
+    "test": "echo 'No tests configured'",
+    "ci-pipeline": "npm ci && npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",
@@ -26,12 +27,21 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.20.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
     "typescript": "~5.8.2",
+    "typescript-eslint": "^8.58.1",
     "vite": "^6.2.0"
   }
 }

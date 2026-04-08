@@ -41,7 +41,7 @@ export const fetchListingsForCity = async (city: string): Promise<Listing[]> => 
     const data = JSON.parse(textResponse);
 
     // Hydrate with client-side only data (images, map coords)
-    return data.map((item: any, index: number) => ({
+    return data.map((item: Record<string, unknown>) => ({
       ...item,
       imageCount: 5,
       // Using specific keywords to get nicer architecture/interior shots

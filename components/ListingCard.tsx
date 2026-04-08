@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Listing } from '../types';
 import { ChevronRight, ChevronLeft, ShieldCheck, StarIcon, HeartIcon, InfoIcon, MapIcon, EyeIcon } from './Icons';
 
