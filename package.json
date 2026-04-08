@@ -16,7 +16,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",
     "@aws-sdk/s3-request-presigner": "^3.1026.0",
-    "@google/genai": "^1.30.0",
     "@tailwindcss/vite": "^4.2.2",
     "@upstash/redis": "^1.37.0",
     "cors": "^2.8.6",

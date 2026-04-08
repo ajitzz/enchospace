@@ -210,8 +210,8 @@ async function startServer() {
         
         // Handle Neon specific "Tenant or user not found" error
         if (dbErrorMessage.includes('Tenant or user not found')) {
-          console.warn('Neon Database: Tenant or user not found. Falling back to AI-generated content.');
-          return res.json([]); // Return empty array so frontend can use Gemini fallback
+          console.warn('Neon Database: Tenant or user not found. Returning empty listings.');
+          return res.json([]); 
         }
 
         console.error('Database Query Error:', dbErrorMessage);
@@ -283,13 +283,12 @@ async function startServer() {
         if (msg.includes('Tenant or user not found')) {
           console.warn('⚠️  Neon Database Warning: "Tenant or user not found".');
           console.warn('   This usually means your DATABASE_URL is incorrect or the project was deleted.');
-          console.warn('   The app will fallback to AI-generated content for now.');
         } else {
           console.error('❌ Database connection failed:', msg);
         }
       }
     } else {
-      console.log('ℹ️  Database not configured. Using AI-generated content only.');
+      console.log('ℹ️  Database not configured. Listings will be empty.');
     }
   });
 }

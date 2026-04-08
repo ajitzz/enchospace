@@ -11,7 +11,6 @@ import ReservationsPage from './components/ReservationsPage';
 import FlyToAnimation from './components/FlyToAnimation';
 import HostForm from './components/HostForm';
 import { MapIcon, ListIcon } from './components/Icons';
-import { fetchListingsForCity } from './services/geminiService';
 import { Listing } from './types';
 
 type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
@@ -71,11 +70,7 @@ function App() {
             apiListings = await apiRes.json();
         }
 
-        // Fetch from Gemini as fallback/supplement
-        const geminiData = await fetchListingsForCity(searchCity);
-        
-        // Combine them
-        setListings([...apiListings, ...geminiData]);
+        setListings(apiListings);
     } catch (e) {
         console.error("Failed to load listings", e);
     } finally {
