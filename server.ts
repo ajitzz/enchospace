@@ -17,16 +17,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize DB (Neon)
+let dbUrl = process.env.DATABASE_URL;
+if (dbUrl && dbUrl.includes('sslmode=')) {
+  dbUrl = dbUrl.replace(/sslmode=[^&?#]*/, 'sslmode=no-verify');
+}
+const isDbConfigured = dbUrl && !dbUrl.includes('dummy');
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  connectionString: isDbConfigured ? dbUrl : undefined,
+  ssl: isDbConfigured ? { rejectUnauthorized: false } : false
 });
 
-// Initialize Redis (Upstash)
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// Initialize Redis (Upstash) - only if real credentials provided
+const isRedisConfigured = process.env.UPSTASH_REDIS_REST_URL && !process.env.UPSTASH_REDIS_REST_URL.includes('dummy');
+const redis = isRedisConfigured 
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+  : null;
 
 // Initialize S3
 const s3 = new S3Client({
@@ -46,6 +54,9 @@ async function startServer() {
 
   // Health check
   app.get('/api/health/db', async (req, res) => {
+    if (!isDbConfigured) {
+      return res.status(503).json({ status: 'error', message: 'DB not configured' });
+    }
     try {
       await pool.query('SELECT 1');
       res.json({ status: 'ok' });
@@ -57,6 +68,9 @@ async function startServer() {
 
   // Init DB schema
   app.post('/api/init-db', async (req, res) => {
+    if (!isDbConfigured) {
+      return res.status(503).json({ status: 'error', message: 'DB not configured' });
+    }
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listings (
@@ -75,7 +89,11 @@ async function startServer() {
       res.json({ status: 'ok', message: 'DB initialized' });
     } catch (error) {
       console.error('DB Init Failed:', error);
-      res.status(500).json({ status: 'error', error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Tenant or user not found')) {
+        return res.status(503).json({ status: 'error', message: 'Neon Database: Tenant or user not found. Check DATABASE_URL.' });
+      }
+      res.status(500).json({ status: 'error', error: errorMessage });
     }
   });
 
@@ -114,6 +132,9 @@ async function startServer() {
 
   // Create listing
   app.post('/api/listings', async (req, res) => {
+    if (!isDbConfigured) {
+      return res.status(503).json({ status: 'error', message: 'DB not configured' });
+    }
     try {
       const { title, description, price, type, address, city, imageUrl } = req.body;
       
@@ -132,40 +153,63 @@ async function startServer() {
       const newListing = result.rows[0];
 
       // Invalidate cache
-      try {
-        await redis.del(`listings:${city.toLowerCase()}`);
-      } catch (e) {
-        console.warn('Redis cache invalidation failed', e);
+      if (redis) {
+        try {
+          await redis.del(`listings:${city.toLowerCase()}`);
+        } catch (e) {
+          console.warn('Redis cache invalidation failed', e);
+        }
       }
 
       res.status(201).json(newListing);
     } catch (error) {
       console.error('Create Listing Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Tenant or user not found')) {
+        return res.status(503).json({ error: 'Neon Database: Tenant or user not found. Check DATABASE_URL.' });
+      }
       res.status(500).json({ error: 'Failed to create listing' });
     }
   });
 
   // Get listings (cache-first)
   app.get('/api/listings', async (req, res) => {
+    if (!isDbConfigured) {
+      return res.status(503).json({ status: 'error', message: 'DB not configured' });
+    }
     try {
       const city = (req.query.city as string) || 'Berlin';
       const cacheKey = `listings:${city.toLowerCase()}`;
 
       // Try cache
-      try {
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-          return res.json(cached);
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            return res.json(cached);
+          }
+        } catch (e) {
+          console.warn('Redis cache read failed', e);
         }
-      } catch (e) {
-        console.warn('Redis cache read failed', e);
       }
 
       // DB fallback
-      const result = await pool.query(
-        'SELECT * FROM listings WHERE city ILIKE $1 ORDER BY created_at DESC',
-        [city]
-      );
+      let result;
+      try {
+        result = await pool.query(
+          'SELECT * FROM listings WHERE city ILIKE $1 ORDER BY created_at DESC',
+          [city]
+        );
+      } catch (dbError) {
+        const dbErrorMessage = dbError instanceof Error ? dbError.message : String(dbError);
+        console.error('Database Query Error:', dbErrorMessage);
+        // Handle Neon specific "Tenant or user not found" error
+        if (dbErrorMessage.includes('Tenant or user not found')) {
+          console.warn('Neon Database: Tenant or user not found. Please check your DATABASE_URL.');
+          return res.json([]); // Return empty array so frontend can use Gemini fallback
+        }
+        throw dbError; // Re-throw other DB errors to be caught by outer catch
+      }
 
       const listings = result.rows.map(row => ({
         id: String(row.id),
@@ -187,10 +231,12 @@ async function startServer() {
       }));
 
       // Set cache
-      try {
-        await redis.set(cacheKey, JSON.stringify(listings), { ex: 3600 });
-      } catch (e) {
-        console.warn('Redis cache write failed', e);
+      if (redis) {
+        try {
+          await redis.set(cacheKey, JSON.stringify(listings), { ex: 3600 });
+        } catch (e) {
+          console.warn('Redis cache write failed', e);
+        }
       }
 
       res.json(listings);
