@@ -60,8 +60,7 @@ const HostForm: React.FC<HostFormProps> = ({ onClose, onSuccess }) => {
 
       onSuccess();
     } catch (error) {
-      console.error(error);
-      alert('Failed to list space');
+      console.error('Failed to list space:', error);
     } finally {
       setLoading(false);
     }

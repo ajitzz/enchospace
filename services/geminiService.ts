@@ -5,7 +5,7 @@ let genAI: GoogleGenAI | null = null;
 
 const getGenAI = () => {
   if (!genAI) {
-    const apiKey = process.env.API_KEY || '';
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
     genAI = new GoogleGenAI({ apiKey });
   }
   return genAI;
@@ -14,7 +14,7 @@ const getGenAI = () => {
 export const fetchListingsForCity = async (city: string): Promise<Listing[]> => {
   try {
     const ai = getGenAI();
-    const model = "gemini-2.0-flash"; // Using a more standard model alias
+    const model = "gemini-2.0-flash";
     const prompt = `Generate 8 high-quality rental listings for ${city}. 
     Use Google Maps to find real neighborhoods and realistic pricing.
     Include a mix of modern apartments and cozy rooms. 
@@ -24,29 +24,18 @@ export const fetchListingsForCity = async (city: string): Promise<Listing[]> => 
     Include 2-3 amenities per listing (e.g., Wifi, Kitchen, Gym).
     Prices should be realistic market rates for ${city} in appropriate currency (EUR for Europe, USD for US/International).
     
-    IMPORTANT: Return ONLY a raw JSON array of objects. Do not include markdown formatting, backticks, or explanations.
-    The JSON objects must have these properties:
+    Return a JSON array of objects with these properties:
     id (string), title (string), price (number), currency (string), period (string), type (APARTMENT, ROOM, or STUDIO), provider (string), isVerified (boolean), discount (number), isNew (boolean), rating (number), reviewCount (number), amenities (array of strings), address (string).`;
 
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
       config: {
-        tools: [{ googleMaps: {} }],
-        // responseMimeType and responseSchema are NOT supported with googleMaps tool
+        responseMimeType: "application/json",
       },
     });
 
-    let textResponse = response.text || "[]";
-    
-    // Cleanup markdown if the model ignores the instruction
-    textResponse = textResponse.trim();
-    if (textResponse.startsWith("```json")) {
-        textResponse = textResponse.replace(/^```json/, "").replace(/```$/, "");
-    } else if (textResponse.startsWith("```")) {
-        textResponse = textResponse.replace(/^```/, "").replace(/```$/, "");
-    }
-
+    const textResponse = response.text || "[]";
     const data = JSON.parse(textResponse);
 
     // Hydrate with client-side only data (images, map coords)

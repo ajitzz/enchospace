@@ -21,10 +21,10 @@ let dbUrl = process.env.DATABASE_URL;
 if (dbUrl && dbUrl.includes('sslmode=')) {
   dbUrl = dbUrl.replace(/sslmode=[^&?#]*/, 'sslmode=no-verify');
 }
-const isDbConfigured = dbUrl && !dbUrl.includes('dummy');
+const isDbConfigured = !!(dbUrl && !dbUrl.includes('dummy'));
 const pool = new Pool({
   connectionString: isDbConfigured ? dbUrl : undefined,
-  ssl: isDbConfigured ? { rejectUnauthorized: false } : false
+  ssl: isDbConfigured ? { rejectUnauthorized: false } : undefined
 });
 
 // Initialize Redis (Upstash) - only if real credentials provided
@@ -254,7 +254,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    // In production, we serve from the same directory as the server.js file
+    // which is the 'dist' folder after compilation
+    const distPath = __dirname;
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

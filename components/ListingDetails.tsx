@@ -222,25 +222,17 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
 
   const handleBookingAction = () => {
       if (!moveInDate) {
-          alert("Please select a move-in date.");
+          console.warn("Please select a move-in date.");
           return;
       }
 
       if (bookingStep === 'AVAILABILITY') {
-          const currentType = configOptions.find(o => o.label === config)?.type || '1BHK';
-          const availability = checkAvailability(currentType, moveInDate);
-          
-          if (availability.status === 'SOLD_OUT') {
-              const confirm = window.confirm("This configuration appears to be sold out for the selected date. Do you want to proceed with a request anyway?");
-              if (!confirm) return;
-          }
-
           // Move to contact form step with animation
           setBookingStep('CONTACT');
       } else {
           // Perform booking
           if (!guestName || !guestPhone) {
-              alert("Please fill in your name and phone number.");
+              console.warn("Please fill in your name and phone number.");
               return;
           }
           if (onBook) {
@@ -258,20 +250,12 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
 
   const handleMobileReserve = () => {
     if (!moveInDate) {
-        alert("Please select a move-in date.");
+        console.warn("Please select a move-in date.");
         return;
     }
     
-    const currentType = configOptions.find(o => o.label === config)?.type || '1BHK';
-    const availability = checkAvailability(currentType, moveInDate);
-    
-    if (availability.status === 'SOLD_OUT') {
-         const confirm = window.confirm("This configuration appears to be sold out for the selected date. Do you want to proceed with a request anyway?");
-         if (!confirm) return;
-    }
-
     if (!guestName || !guestPhone) {
-        alert("Please fill in your name and phone number.");
+        console.warn("Please fill in your name and phone number.");
         return;
     }
     if (onBook) {
