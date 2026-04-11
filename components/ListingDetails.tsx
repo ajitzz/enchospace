@@ -1,6 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Listing, NearbyPoint } from '../types';
-import { ChevronLeft, StarIcon, ShieldCheck, HeartIcon, MapIcon, PhoneIcon, MessageCircleIcon, WifiIcon, GymIcon, TrainIcon, ShoppingBagIcon, TreeIcon, CoffeeIcon, ChevronDown, XIcon, CalendarIcon } from './Icons';
+import { 
+  ChevronLeft, 
+  StarIcon, 
+  ShieldCheck, 
+  HeartIcon, 
+  MapIcon, 
+  PhoneIcon, 
+  MessageCircleIcon, 
+  WifiIcon, 
+  GymIcon, 
+  TrainIcon, 
+  ShoppingBagIcon, 
+  TreeIcon, 
+  CoffeeIcon, 
+  ChevronDown, 
+  XIcon, 
+  CalendarIcon,
+  UtensilsIcon,
+  CarIcon,
+  WavesIcon,
+  BriefcaseIcon,
+  PawPrintIcon,
+  SmokeIcon
+} from './Icons';
 
 interface ListingDetailsProps {
   listing: Listing;
@@ -17,7 +40,12 @@ const getAmenityIcon = (amenity: string) => {
     const lower = amenity.toLowerCase();
     if (lower.includes('wifi') || lower.includes('internet')) return <WifiIcon className="w-5 h-5" />;
     if (lower.includes('gym') || lower.includes('fitness')) return <GymIcon className="w-5 h-5" />;
-    if (lower.includes('kitchen')) return <div className="w-5 h-5 flex items-center justify-center font-bold text-xs border border-current rounded">K</div>;
+    if (lower.includes('kitchen')) return <UtensilsIcon className="w-5 h-5" />;
+    if (lower.includes('parking')) return <CarIcon className="w-5 h-5" />;
+    if (lower.includes('pool')) return <WavesIcon className="w-5 h-5" />;
+    if (lower.includes('workspace')) return <BriefcaseIcon className="w-5 h-5" />;
+    if (lower.includes('pets')) return <PawPrintIcon className="w-5 h-5" />;
+    if (lower.includes('smoking')) return <SmokeIcon className="w-5 h-5" />;
     return <ShieldCheck className="w-5 h-5" />;
 };
 
@@ -415,6 +443,15 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onBack, simila
                         <span className="underline cursor-pointer hover:text-black">{listing.reviewCount} reviews</span>
                         <span>·</span>
                         <span className="underline cursor-pointer hover:text-black">{listing.address || "Berlin, Germany"}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-gray-700 font-medium">
+                        <span>{listing.maxGuests} guests</span>
+                        <span className="text-gray-300">·</span>
+                        <span>{listing.bedrooms || 1} bedroom</span>
+                        <span className="text-gray-300">·</span>
+                        <span>{listing.beds || 1} bed</span>
+                        <span className="text-gray-300">·</span>
+                        <span>{listing.bathrooms || 1} bathroom</span>
                     </div>
                 </div>
 

@@ -13,7 +13,7 @@ import HostForm from './components/HostForm';
 import { MapIcon, ListIcon } from './components/Icons';
 import { Listing } from './types';
 
-type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS';
+type ViewState = 'SEARCH' | 'DETAILS' | 'WISHLIST' | 'BOOKING' | 'RESERVATIONS' | 'HOSTING';
 
 interface BookingData {
     moveInDate: string;
@@ -47,7 +47,6 @@ function App() {
   const [flyAnimation, setFlyAnimation] = useState<FlyAnimationState | null>(null);
   const [highlightReserves, setHighlightReserves] = useState(false);
   const [highlightWishlist, setHighlightWishlist] = useState(false);
-  const [showHostForm, setShowHostForm] = useState(false);
   
   const [lastBooking, setLastBooking] = useState<BookingData | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -199,6 +198,17 @@ function App() {
       );
   }
 
+  if (currentView === 'HOSTING') {
+      return (
+          <HostForm 
+            onBack={() => setCurrentView('SEARCH')}
+            onSuccess={() => {
+                handleSearch(city); // Refresh listings
+            }} 
+          />
+      );
+  }
+
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-[#E31C5F]/20 selection:text-[#E31C5F]">
       {/* Global Fly Animation Overlay */}
@@ -215,23 +225,13 @@ function App() {
         currentCity={city} 
         onWishlistClick={() => setCurrentView('WISHLIST')}
         onReservesClick={() => setCurrentView('RESERVATIONS')}
-        onHostClick={() => setShowHostForm(true)}
+        onHostClick={() => setCurrentView('HOSTING')}
         highlightReserves={highlightReserves}
         highlightWishlist={highlightWishlist}
         reservesCount={reservations.length}
         wishlistCount={favorites.length}
       />
       <FilterBar />
-
-      {showHostForm && (
-        <HostForm 
-          onClose={() => setShowHostForm(false)} 
-          onSuccess={() => {
-            setShowHostForm(false);
-            handleSearch(city); // Refresh listings
-          }} 
-        />
-      )}
 
       <main className="max-w-[1920px] mx-auto pt-6 px-4 md:px-6 relative">
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] xl:hidden">

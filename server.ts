@@ -88,9 +88,35 @@ async function startServer() {
           address VARCHAR(255) NOT NULL,
           city VARCHAR(100) NOT NULL,
           image_url TEXT,
+          max_guests INT DEFAULT 2,
+          bedrooms INT DEFAULT 1,
+          beds INT DEFAULT 1,
+          bathrooms INT DEFAULT 1,
+          amenities TEXT[] DEFAULT '{}',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      // Ensure new columns exist if table was already created
+      const columns = [
+        ['max_guests', 'INT DEFAULT 2'],
+        ['bedrooms', 'INT DEFAULT 1'],
+        ['beds', 'INT DEFAULT 1'],
+        ['bathrooms', 'INT DEFAULT 1'],
+        ['amenities', "TEXT[] DEFAULT '{}'"]
+      ];
+
+      for (const [col, type] of columns) {
+        await pool.query(`
+          DO $$ 
+          BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='${col}') THEN
+              ALTER TABLE listings ADD COLUMN ${col} ${type};
+            END IF;
+          END $$;
+        `);
+      }
+
       res.json({ status: 'ok', message: 'DB initialized' });
     } catch (error) {
       console.error('DB Init Failed:', error);
@@ -141,7 +167,7 @@ async function startServer() {
       return res.status(503).json({ status: 'error', message: 'DB not configured' });
     }
     try {
-      const { title, description, price, type, address, city, imageUrl } = req.body;
+      const { title, description, price, type, address, city, imageUrl, maxGuests, bedrooms, beds, bathrooms, amenities } = req.body;
       
       // Validate
       if (!title || !price || !type || !address || !city) {
@@ -150,9 +176,9 @@ async function startServer() {
 
       // Insert into DB
       const result = await pool.query(
-        `INSERT INTO listings (title, description, price, type, address, city, image_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [title, description, price, type, address, city, imageUrl]
+        `INSERT INTO listings (title, description, price, type, address, city, image_url, max_guests, bedrooms, beds, bathrooms, amenities)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        [title, description, price, type, address, city, imageUrl, maxGuests, bedrooms, beds, bathrooms, amenities]
       );
 
       const newListing = result.rows[0];
@@ -234,7 +260,11 @@ async function startServer() {
         discount: 0,
         rating: 5.0,
         reviewCount: 0,
-        amenities: ['Wifi', 'Kitchen'],
+        amenities: row.amenities || ['Wifi', 'Kitchen'],
+        maxGuests: row.max_guests,
+        bedrooms: row.bedrooms,
+        beds: row.beds,
+        bathrooms: row.bathrooms,
       }));
 
       // Set cache
@@ -273,6 +303,53 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on http://localhost:${PORT}`);
     
+    // Auto-init DB schema
+    if (isDbConfigured) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS listings (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            price DECIMAL NOT NULL,
+            currency VARCHAR(10) DEFAULT 'USD',
+            type VARCHAR(50) NOT NULL,
+            address VARCHAR(255) NOT NULL,
+            city VARCHAR(100) NOT NULL,
+            image_url TEXT,
+            max_guests INT DEFAULT 2,
+            bedrooms INT DEFAULT 1,
+            beds INT DEFAULT 1,
+            bathrooms INT DEFAULT 1,
+            amenities TEXT[] DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+
+        const columns = [
+          ['max_guests', 'INT DEFAULT 2'],
+          ['bedrooms', 'INT DEFAULT 1'],
+          ['beds', 'INT DEFAULT 1'],
+          ['bathrooms', 'INT DEFAULT 1'],
+          ['amenities', "TEXT[] DEFAULT '{}'"]
+        ];
+
+        for (const [col, type] of columns) {
+          await pool.query(`
+            DO $$ 
+            BEGIN 
+              IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='${col}') THEN
+                ALTER TABLE listings ADD COLUMN ${col} ${type};
+              END IF;
+            END $$;
+          `);
+        }
+        console.log('✅ Database schema verified/updated');
+      } catch (error) {
+        console.error('❌ Database init failed:', error instanceof Error ? error.message : String(error));
+      }
+    }
+
     // Proactive DB check
     if (isDbConfigured) {
       try {

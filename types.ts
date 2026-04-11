@@ -43,6 +43,9 @@ export interface Listing {
   rooms?: Room[];
   nearby?: NearbyPoint[];
   maxGuests?: number;
+  bedrooms?: number;
+  beds?: number;
+  bathrooms?: number;
 }
 
 export interface SearchState {
